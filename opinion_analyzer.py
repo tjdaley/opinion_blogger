@@ -19,6 +19,7 @@ POSTS_LOCAL_PATH = os.getenv('POSTS_LOCAL_PATH')
 GOOGLE_SHEET_NAME = os.getenv('GOOGLE_SHEET_NAME')
 JSON_KEYFILE = os.getenv('JSON_KEYFILE')
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+OPENAI_MODEL = os.getenv('OPENAI_MODEL')
 TABLE_ELEMENT_ID = os.getenv('TABLE_ELEMENT_ID')
 SCOTX_URL = os.getenv('SCOTX_URL')
 MAX_OPINION_SIZE = os.getenv('MAX_OPINION_SIZE')
@@ -96,7 +97,7 @@ def analyze_with_full_text(case_name, full_text):
     }}
     """
     response = client.chat.completions.create(
-        model="gpt-4o", # Using 4o for better legal reasoning
+        model=OPENAI_MODEL, # Using 4o for better legal reasoning
         messages=[{"role": "system", "content": "You provide structured legal analysis."},
                   {"role": "user", "content": prompt}],
         response_format={ "type": "json_object" }
@@ -222,7 +223,7 @@ def generate_blog_post(case_data, opinion_text):
     """
     
     response = client.chat.completions.create(
-        model="gpt-5-mini",
+        model=OPENAI_MODEL,
         messages=[{"role": "system", "content": "You are a Texas Board Certified Family Law Attorney."},
                   {"role": "user", "content": prompt}]
     )

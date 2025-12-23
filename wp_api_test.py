@@ -1,3 +1,7 @@
+"""
+wp_api_test - A script to test WordPress REST API connection, authentication, and category/schema availability.
+"""
+
 import os
 import requests
 from requests.auth import HTTPBasicAuth
