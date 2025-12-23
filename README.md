@@ -39,6 +39,9 @@ cd blogwriter
 ### 2. Install Dependencies
 
 ```bash
+python -m venv venv
+venv\scripts\activate.bat # Windows
+source .\venv\bin\activate # Linux
 pip install -r requirements.txt
 ```
 
