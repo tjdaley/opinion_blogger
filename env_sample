@@ -1,0 +1,25 @@
+# Local File Cache
+OPINION_LOCAL_PATH = "path to folder where PDFs will be downloaded to"
+POSTS_LOCAL_PATH = "path to folder where blog post json files will be saved to"
+
+# Google Sheets Table
+GOOGLE_SHEET_NAME = "Texas Appellate Blog Tracker"
+JSON_KEYFILE = "name of your keyfile.json"
+
+# AI Parameters
+MAX_OPINION_SIZE = 12000
+OPENAI_API_KEY = "Your OpenAI Key"
+OPENAI_MODEL = "gpt-5-mini"
+
+# For Posting to Blog
+WP_BASE_URL = "https://your-web-site-url/wp-json/wp/v2"
+WP_USERNAME = "your wordpress username"
+WP_APP_PASSWORD = "your wordpress application password - not your browser password"
+AUTHOR_ID = id of the word press author who will be attributed
+CATEGORY_IDS = comma-separated list of category ids to apply to each blog post
+TAG_IDS = comma-separated list of tag ids to apply to each blog post
+MEDIA_ID = id of media file that will be used as the feature image for each post
+
+# SCOTXBLOG Settings
+TABLE_ELEMENT_ID = "stagingDateTable"
+SCOTX_URL = "https://data.scotxblog.com/scotx/staging/decided"
