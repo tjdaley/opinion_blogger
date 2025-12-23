@@ -50,12 +50,10 @@ pip install -r requirements.txt
 Create a `.env` file or update the configuration section in the script with the following:
 
 * `OPENAI_API_KEY`: Your OpenAI API key.
-* `service_account.json`: Your Google Cloud Service Account credentials (placed in the root directory).
-* `WORDPRESS_NAME` & `WORDPRESS_PASSWORD`: Your WordPress Application Passwords.
 * `OPINION_LOCAL_PATH`: Local directory for PDF storage (e.g., `Z:/Client Files/...`).
 * `POSTS_LOCAL_PATH`: = Local directory where blog post json files will be saved to.
 * `GOOGLE_SHEET_NAME`: "Texas Appellate Blog Tracker"
-* `JSON_KEYFILE`: "name of your keyfile.json"
+* `JSON_KEYFILE`: "service_account.json"
 * `MAX_OPINION_SIZE`: 12000
 * `OPENAI_API_KEY`: Your OpenAI Key
 * `OPENAI_MODEL`: "gpt-5-mini"
@@ -76,6 +74,7 @@ Create a `.env` file or update the configuration section in the script with the 
 * **`wp_uploader.py`**: The "Publisher." Converts Markdown to HTML and pushes drafts to WordPress.
 * **`requirements.txt`**: List of necessary Python libraries.
 * **`.env`**: Environment variables used by the Python files
+* **`service_account.json`**: Your Google Cloud Service Account credentials (placed in the root directory).
 
 ## Legal Disclaimer
 
