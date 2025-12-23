@@ -1,4 +1,4 @@
-# blog_writer
+# opinion_blogger
 An automated pipeline for Texas family law litigators to identify, analyze, and publish blog content based on recent appellate opinions from the Texas Supreme Court (SCOTX) and Courts of Appeals.
 
 ## Overview
@@ -18,7 +18,7 @@ A Python-driven workflow that:
 3. **Analyzes:** Reads the actual PDF text via PyMuPDF to extract the **Holding** and **Legal Issue**.
 4. **Publishes:** Sends structured, SEO-optimized drafts directly to a WordPress site via the REST API.
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 * **Language:** Python 3.10+
 * **AI:** OpenAI API (GPT-4o) for legal reasoning and ghostwriting.
