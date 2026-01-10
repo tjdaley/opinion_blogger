@@ -2,7 +2,13 @@ requests
 beautifulsoup4
 gspread
 markdown
+markdownify
 oauth2client
 openai
+pydantic
+pydantic-ai
+pydantic-settings
 pymupdf
-python-dotenv
+supabase
+postgrest
+tenacity

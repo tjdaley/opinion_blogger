@@ -1,24 +1,22 @@
 from datetime import datetime
 import os
+from typing import Union
 import gspread
 import json
-import fitz  # PyMuPDF
-from oauth2client.service_account import ServiceAccountCredentials
+import fitz  # pyright: ignore[reportMissingTypeStubs] # PyMuPDF
+from oauth2client.service_account import ServiceAccountCredentials  # pyright: ignore[reportMissingTypeStubs]
 from openai import OpenAI
-from dotenv import load_dotenv
-
-load_dotenv()
+from util.settings import settings
 
 # --- CONFIGURATION ---
-OPINION_LOCAL_PATH = os.getenv('OPINION_LOCAL_PATH')
-POSTS_LOCAL_PATH = os.getenv('POSTS_LOCAL_PATH')
-GOOGLE_SHEET_NAME = os.getenv('GOOGLE_SHEET_NAME')
-JSON_KEYFILE = os.getenv('JSON_KEYFILE')
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
-OPENAI_MODEL = os.getenv('OPENAI_MODEL')
-TABLE_ELEMENT_ID = os.getenv('TABLE_ELEMENT_ID')
-SCOTX_URL = os.getenv('SCOTX_URL')
-MAX_OPINION_SIZE = os.getenv('MAX_OPINION_SIZE')
+OPINION_LOCAL_PATH = settings.opinion_local_path
+POSTS_LOCAL_PATH = settings.posts_local_path
+GOOGLE_SHEET_NAME = settings.google_sheet_name
+JSON_KEYFILE = settings.json_keyfile
+OPENAI_API_KEY = settings.openai_api_key
+OPENAI_MODEL = settings.openai_model
+TABLE_ELEMENT_ID = settings.table_element_id
+MAX_OPINION_SIZE = settings.max_opinion_size
 
 # Connect to LLM
 client = OpenAI(api_key=OPENAI_API_KEY)
@@ -30,35 +28,35 @@ for path in [OPINION_LOCAL_PATH, POSTS_LOCAL_PATH]:
 
 # --- GOOGLE SHEETS SETUP ---
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-creds = ServiceAccountCredentials.from_json_keyfile_name(JSON_KEYFILE, scope)
-gc = gspread.authorize(creds)
+creds = ServiceAccountCredentials.from_json_keyfile_name(JSON_KEYFILE, scope)  # type: ignore
+gc = gspread.authorize(creds)  # type: ignore
 sheet = gc.open(GOOGLE_SHEET_NAME).sheet1
 
-def get_pdf_text(filepath):
+def get_pdf_text(filepath: str) -> str:
     """Extracts the first MAX_OPINION_SIZE characters from the PDF for AI analysis."""
     text = ""
     try:
         with fitz.open(filepath) as doc:
             # We usually only need the first few pages for the summary/holding
             for page in doc[:5]: 
-                text += page.get_text()
+                text += page.get_text()  # type: ignore
     except Exception as e:
         print(f"Error reading PDF {filepath}: {e}")
-    return text[:MAX_OPINION_SIZE]
+    return text[:MAX_OPINION_SIZE]  # type: ignore
 
-def opinion_text(row) -> str:
+def opinion_text(row: dict[str, Union[str, int, float]]) -> Union[str, None]:
     # We fetch the PDF text we already downloaded
     pdf_path = os.path.join(OPINION_LOCAL_PATH, f"{row['Case Number']}.pdf")
     _text = get_pdf_text(pdf_path) if os.path.exists(pdf_path) else ""
     return _text
 
-def generate_blog_post(case_data, opinion_text):
+def generate_blog_post(case_data: dict[str, Union[str, int, float]], opinion_text: str):
     """
     Generates a professional blog post designed for attorney citation.
     """
     print("Opinion text length:", len(opinion_text))
     
-    date_object = datetime.strptime(case_data['Opinion Date'], "%Y-%m-%d")
+    date_object = datetime.strptime(str(case_data['Opinion Date']), "%Y-%m-%d")
     opinion_date = date_object.strftime("%B %d, %Y")
     
     if not case_data['Family Law?']:
@@ -179,7 +177,11 @@ def generate_blog_posts():
     
     for i, row in enumerate(records):
         if row['Status'] == 'pending-blog':
-            post_body = generate_blog_post(row, opinion_text(row))
+            _text = opinion_text(row)
+            if not _text:
+                print(f"Skipping case {row['Case Number']} due to missing opinion text.")
+                continue
+            post_body = generate_blog_post(row, _text)
             if post_body:
                 row['body'] = post_body
                 post_count += 1

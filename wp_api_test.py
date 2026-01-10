@@ -2,17 +2,14 @@
 wp_api_test - A script to test WordPress REST API connection, authentication, and category/schema availability.
 """
 
-import os
 import requests
 from requests.auth import HTTPBasicAuth
-from dotenv import load_dotenv
+from util.settings import settings
 
-load_dotenv()
-# --- YOUR CONFIG ---
-WP_BASE_URL = os.getenv('WP_BASE_URL')
-WP_USERNAME = os.getenv('WP_USERNAME')
-WP_APP_PASSWORD = os.getenv('WP_APP_PASSWORD')
-AUTHOR_ID = int(os.getenv('AUTHOR_ID'))
+WP_BASE_URL = settings.wp_base_url
+WP_USERNAME = settings.wp_username
+WP_APP_PASSWORD = settings.wp_app_password
+AUTHOR_ID = int(settings.author_id)
 
 def test_wordpress_connection():
     print(f"Testing connection to {WP_BASE_URL}...")
