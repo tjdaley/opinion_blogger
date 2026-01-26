@@ -3,30 +3,38 @@ scotxblog_scraper.py - A script to scrape Texas appellate court opinions.
 
 This scraper is designed to scrape https://data.scotxblog.com/scotx/staging/decided
 """
+import asyncio
 from datetime import datetime
 import os
 from bs4 import BeautifulSoup
 from util.settings import settings
+from uuid import uuid4
 
-from core import download_pdf, get_pdf_text, analyze_with_full_text, review_non_family_cases, sheet, http
+from core import download_pdf, get_pdf_text, analyze_with_full_text, review_non_family_cases, http
+from db.models.opinion_tracking import OpinionTracking
+from db.repositories.opinion_tracking import OpinionTrackingRepository
+from db.supabasemanager import SupabaseManager
+from util.loggerfactory import LoggerFactory
+
+logger = LoggerFactory.create_logger(__name__)
 
 # --- CONFIGURATION ---
 OPINION_LOCAL_PATH = settings.opinion_local_path
 POSTS_LOCAL_PATH = settings.posts_local_path
-GOOGLE_SHEET_NAME = settings.google_sheet_name
-JSON_KEYFILE = settings.json_keyfile
-OPENAI_API_KEY = settings.openai_api_key
-OPENAI_MODEL = settings.openai_model
-TABLE_ELEMENT_ID = settings.table_element_id
 SCOTX_URL = settings.scotx_url
 MAX_OPINION_SIZE = settings.max_opinion_size
+TABLE_ELEMENT_ID = settings.table_element_id
 
 # --- PREPARE DIRECTORIES ---
 for path in [OPINION_LOCAL_PATH, POSTS_LOCAL_PATH]:
     if not os.path.exists(path):
         os.makedirs(path)
 
-def run_scotx_bot():
+# --- DB CONNECTION ---
+manager = SupabaseManager()
+opinion_repo = OpinionTrackingRepository(manager)
+
+async def run_scotx_bot():
     """
     Main function to run the SCOTX case scraper and analyzer.
 
@@ -36,28 +44,28 @@ def run_scotx_bot():
         None
     """
     try:
-        print(f"Downloading case list from {SCOTX_URL}")
+        logger.info("Downloading case list from %s", SCOTX_URL)
         resp = http.get(SCOTX_URL, timeout=20)
         soup = BeautifulSoup(resp.text, 'html.parser')
     except Exception as e:
-        print(f"Could not reach SCOTX blog: {e}")
+        logger.error("Could not reach SCOTX blog: %s", e)
         return
     
     table = soup.find('table', id=TABLE_ELEMENT_ID)
     if not table:
-        print("Error - Could not find table having ID {TABLE_ELEMENT_ID}")
+        logger.error("Error - Could not find table having ID %s", TABLE_ELEMENT_ID)
     rows = soup.find('table', id=TABLE_ELEMENT_ID).find_all('tr')  # type: ignore
     
-    existing_dockets = sheet.col_values(1)
-    
     # Initial pass to see if directly related to a family law topic.
-    print("Processing cases - initial pass for family cases")
+    logger.info("Processing cases - initial pass for family cases")
     for row in rows:
         tds = row.find_all('td')
         if not tds: continue
         
         case_num = tds[0].get_text(strip=True)
-        if case_num in existing_dockets: continue
+        if opinion_repo.exists("case_number", case_num):
+            logger.info("Case %s already exists in the repository. Skipping.", case_num)
+            continue
         
         case_name = tds[1].find(string=True, recursive=False).strip()  # type: ignore
         link_tag = tds[1].find('a', class_='btn-mini')
@@ -70,25 +78,36 @@ def run_scotx_bot():
         
         # 2. Extract Text & Analyze
         opinion_text = get_pdf_text(pdf_path)
-        analysis = analyze_with_full_text(case_name, opinion_text)
+        analysis = await analyze_with_full_text(case_name, opinion_text)
         
         # 3. Save to Sheet
-        status = "pending-blog" if analysis['family_law'] else "pending-review"
-        row_data = [ # type: ignore
-            case_num, status, str(analysis['family_law']), 
-            analysis['headline'], analysis['legal_issue'], 
-            analysis['holding'], link_tag['href'], 
-            datetime.now().strftime("%Y-%m-%d"), "SCOTX", tds[2].get_text(strip=True),
-            analysis['case_name'], analysis['lower_court_name'], analysis['seo_title'],
-            analysis['seo_focuskw'], analysis['meta_description']
-        ]
-        sheet.append_row(row_data)  # type: ignore
-        print(f"Processed {case_num}: {analysis['headline']}")
+        status = "pending-blog" if analysis.family_law else "pending-review"
+        opinion = OpinionTracking(
+            case_number=case_num,
+            status=status,
+            is_family_law=analysis.family_law,
+            headline=analysis.headline,
+            legal_issue=analysis.legal_issue,
+            holding=analysis.holding,
+            opinion_link=link_tag['href'],  # type: ignore
+            processed_at=datetime.now(),
+            court="SCOTX",
+            opinion_date=datetime.strptime(tds[2].get_text(strip=True), "%Y-%m-%d").date(),
+            case_name=analysis.case_name,
+            lower_court_name=analysis.lower_court_name,
+            seo_title=analysis.seo_title,
+            seo_focus_kw=analysis.seo_focuskw,
+            meta_description=analysis.meta_description,
+            case_key=str(uuid4())
+        )
+        opinion_repo.insert(opinion.model_dump(mode="json"))
+        logger.info("Processed %s: %s", case_num, analysis.headline)
         
     # Follow up pass to see if any cases that weren't directly related to family law
     # might have a procedural or evidentiary element that is relevant to family law attorneys.
-    print("Looking for relevant angle in non-faily cases")
-    review_non_family_cases()
+    logger.info("Looking for relevant angle in non-faily cases")
+    await review_non_family_cases()
 
 if __name__ == "__main__":
-    run_scotx_bot()
+    logger.info("Starting SCOTXBLOG scraper bot")
+    asyncio.run(run_scotx_bot())

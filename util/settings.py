@@ -52,6 +52,8 @@ class Settings(BaseSettings):
     gemini_model: str = "gemini-3-flash-preview"
     gemini_fast_model: str = "gemini-2.0-flash-lite"
     gemini_model_prefix: str = "google-gla"
+    gemini_chat_temperature: float = 1.0
+    gemini_chat_top_p: float = 0.95
 
     openai_api_key: str = ""
     openai_model: str = ""

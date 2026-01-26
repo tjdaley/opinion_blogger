@@ -1,3 +1,4 @@
+import os
 from typing import Optional
 from pydantic_ai.models import Model
 from pydantic_ai import ModelSettings
@@ -6,6 +7,29 @@ from util.settings import settings
 from util.loggerfactory import LoggerFactory
 
 LOGGER = LoggerFactory.create_logger(__name__)
+
+def get_prompt(prompt_name: str, raise_error: bool = False) -> str:
+    """
+    Retrieve the prompt text from the prompts directory based on the prompt name.
+
+    :param prompt_name: The name of the prompt file (without extension)
+    :type prompt_name: str
+    :param raise_error: Whether to raise an error if the prompt file is not found. Default is False.
+    :type raise_error: bool
+
+    :return: The content of the prompt file
+    :rtype: str
+    """
+    prompt_path = os.path.join("agents", "prompts", f"{prompt_name}.txt")
+    try:
+        with open(prompt_path, "r") as file:
+            return file.read()
+    except FileNotFoundError:
+        if raise_error:
+            LOGGER.error(f"Prompt file not found: {prompt_path}")
+            raise
+        LOGGER.warning(f"Prompt file not found: {prompt_path}")
+        return ""
 
 def get_llm_param(vendor: str, param_name: str, mode: str) -> str:
     """

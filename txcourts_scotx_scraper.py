@@ -1,13 +1,21 @@
 """
 txcourts_scotx_scraper - A script to scrape Texas Supreme Court opinions from txcourts.gov.
 """
+import asyncio
 import os
 import re
 from datetime import datetime
+from uuid import uuid4
 from bs4 import BeautifulSoup
 from util.settings import settings
 
-from core import download_pdf, get_pdf_text, analyze_with_full_text, review_non_family_cases, sheet, http
+from core import download_pdf, get_pdf_text, analyze_with_full_text, review_non_family_cases, http
+from db.models.opinion_tracking import OpinionTracking
+from db.repositories.opinion_tracking import OpinionTrackingRepository
+from db.supabasemanager import SupabaseManager
+from util.loggerfactory import LoggerFactory
+
+logger = LoggerFactory.create_logger(__name__)
 
 # --- CONFIGURATION (Reusing your .env variables) ---
 OPINION_LOCAL_PATH = settings.opinion_local_path
@@ -21,29 +29,30 @@ MAX_OPINION_SIZE = settings.max_opinion_size
 TX_COURTS_BASE = "https://www.txcourts.gov"
 TX_START_URL = f"{TX_COURTS_BASE}/supreme/orders-opinions/"
 
+manager = SupabaseManager()
+opinion_repo = OpinionTrackingRepository(manager)
+
 # --- PREPARE DIRECTORIES ---
 for path in [OPINION_LOCAL_PATH, POSTS_LOCAL_PATH]:
     if not os.path.exists(path):
         os.makedirs(path)
 
 
-def scrape_tx_courts():
-    print(f"Checking main page: {TX_START_URL}")
+async def scrape_tx_courts():
+    logger.info("Checking main page: %s", TX_START_URL)
     resp = http.get(TX_START_URL)
     soup = BeautifulSoup(resp.text, 'html.parser')
     
     # Step 1: Find the "Recently Released" list
     heading = soup.find('h2', string="Recently Released")  # type: ignore
     if not heading:
-        print("Could not find 'Recently Released' heading.")
+        logger.error("Could not find 'Recently Released' heading.")
         return
     
     links: list[dict[str, str]] = heading.find_next('ul').find_all('a')  # type: ignore
     if not links:
-        print("No links found under 'Recently Released'.")
+        logger.error("No links found under 'Recently Released'.")
         return
-
-    existing_dockets = sheet.col_values(1)
 
     for date_link in links:  # type: ignore
         page_url = TX_COURTS_BASE + date_link.get('href', '')  # type: ignore
@@ -56,7 +65,7 @@ def scrape_tx_courts():
             opinion_date = datetime.strptime(opinion_date_str, "%B %d, %Y")  # type: ignore
         opinion_date_str = opinion_date.strftime("%Y-%m-%d")
 
-        print(f"--- Processing Date: {opinion_date_str} ---")
+        logger.info("--- Processing Date: %s ---", opinion_date_str)
         
         page_resp = http.get(page_url)  # type: ignore
         page_soup = BeautifulSoup(page_resp.text, 'html.parser')
@@ -87,37 +96,48 @@ def scrape_tx_courts():
                     case_name = a54_div.get_text(strip=True) if a54_div else "Unknown Case Name"
                 current_search = current_search.find_previous_sibling('tr')
 
-            if not case_num or case_num in existing_dockets:
-                if case_num in existing_dockets:
-                    print(f"Skipping existing or duplicate case: {case_num}")
-                else:
-                    print("Could not find Case Number for PDF:", pdf_url)  # type: ignore
+            if not case_num:
+                logger.warning("Could not find Case Number for PDF: %s", (pdf_url or "<unknown>"))  # type: ignore
+                continue
+                
+            if opinion_repo.exists("case_number", case_num):
+                logger.info("Skipping existing or duplicate case: %s", case_num)
                 continue
 
-            print(f"Found New Case: {case_num} - {case_name}")
+            logger.info("Found New Case: %s - %s", case_num, case_name)
             
             # Step 4: Process the case
             pdf_path = download_pdf(pdf_url, case_num)  # type: ignore
             if not pdf_path: continue
             
             full_text = get_pdf_text(pdf_path)
-            analysis = analyze_with_full_text(case_name, full_text)
+            analysis = await analyze_with_full_text(case_name, full_text)
             
             # Save to Sheet (Using your same row format)
-            status = "pending-blog" if analysis['family_law'] else "pending-review"
-            row_data = [  # type: ignore
-                case_num, status, str(analysis['family_law']), 
-                analysis['headline'], analysis['legal_issue'], 
-                analysis['holding'], pdf_url, 
-                datetime.now().strftime("%Y-%m-%d"), "SCOTX", opinion_date_str,
-                analysis['case_name'], analysis['lower_court_name'], analysis['seo_title'],
-                analysis['seo_focuskw'], analysis['meta_description']
-            ]
-            sheet.append_row(row_data)  # type: ignore
-            existing_dockets.append(case_num) # Update local list to prevent dupes in same run
-            print(f"Success: {case_num} added to sheet.")
+            status = "pending-blog" if analysis.family_law else "pending-review"
+            opinion = OpinionTracking(
+                case_number=case_num,
+                status=status,
+                is_family_law=analysis.family_law,
+                headline=analysis.headline,
+                legal_issue=analysis.legal_issue,
+                holding=analysis.holding,
+                opinion_link=pdf_url,  # type: ignore
+                processed_at=datetime.now(),
+                court="SCOTX",
+                opinion_date=datetime.strptime(opinion_date_str, "%Y-%m-%d").date(),
+                case_name=analysis.case_name,
+                lower_court_name=analysis.lower_court_name,
+                seo_title=analysis.seo_title,
+                seo_focus_kw=analysis.seo_focuskw,
+                meta_description=analysis.meta_description,
+                case_key=str(uuid4())
+            )
+            opinion_repo.insert(opinion.model_dump(mode="json"))
+            logger.info("Processed %s: %s", case_num, analysis.headline)
 
-    review_non_family_cases()
+    await review_non_family_cases()
 
 if __name__ == "__main__":
-    scrape_tx_courts()
+    logger.info("Starting TX Courts SCOTX scraper bot")
+    asyncio.run(scrape_tx_courts())

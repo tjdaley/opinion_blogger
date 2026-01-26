@@ -1,34 +1,29 @@
 import os
-from typing import Union
+from typing import List
 import requests
-import json
 import fitz  # pyright: ignore[reportMissingTypeStubs] # PyMuPDF
 from urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials  # pyright: ignore[reportMissingTypeStubs]
-from openai import OpenAI
 from util.settings import settings
+
+from db.models.opinion_tracking import OpinionTrackingInDB
+from db.repositories.opinion_tracking import OpinionTrackingRepository
+from db.supabasemanager import SupabaseManager
+from agents.family_angle_agent import family_angle_agent, user_prompt as family_angle_user_prompt, FamilyAngle
+from agents.case_analysis_agent import case_analysis_agent, user_prompt as case_analysis_user_prompt, CaseAnalysis
+from util.loggerfactory import LoggerFactory
+
+logger = LoggerFactory.create_logger(__name__)
 
 # --- CONFIGURATION ---
 OPINION_LOCAL_PATH = settings.opinion_local_path
 POSTS_LOCAL_PATH = settings.posts_local_path
-GOOGLE_SHEET_NAME = settings.google_sheet_name
-JSON_KEYFILE = settings.json_keyfile
-OPENAI_API_KEY = settings.openai_api_key
-OPENAI_MODEL = settings.openai_model
-TABLE_ELEMENT_ID = settings.table_element_id
 SCOTX_URL = settings.scotx_url
 MAX_OPINION_SIZE = settings.max_opinion_size
 
-# --- OPENAI SETUP ---
-client = OpenAI(api_key=OPENAI_API_KEY)
-
-# --- GOOGLE SHEETS SETUP ---
-scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-creds = ServiceAccountCredentials.from_json_keyfile_name(JSON_KEYFILE, scope)  # type: ignore
-gc = gspread.authorize(creds)  # type: ignore
-sheet = gc.open(GOOGLE_SHEET_NAME).sheet1
+# --- DB CONNECTION ---
+manager = SupabaseManager()
+opinion_repo = OpinionTrackingRepository(manager)
 
 # --- SESSION SETUP ---
 def get_robust_session() -> requests.Session:
@@ -67,10 +62,10 @@ def get_pdf_text(filepath: str) -> str:
             for page in doc[:5]: 
                 text += page.get_text()  # type: ignore
     except Exception as e:
-        print(f"Error reading PDF {filepath}: {e}")
+        logger.error("Error reading PDF %s: %s", filepath, e)
     return text[:MAX_OPINION_SIZE]  # type: ignore
 
-def analyze_with_full_text(case_name: str, full_text: str) -> dict[str, str]:
+async def analyze_with_full_text(case_name: str, full_text: str) -> CaseAnalysis:
     """
     Uses the actual opinion text to extract professional legal data.
     
@@ -79,59 +74,25 @@ def analyze_with_full_text(case_name: str, full_text: str) -> dict[str, str]:
         full_text -- Full text of the court opinion
 
     Returns:
-        A dictionary with analysis results
+        Instance of CaseAnalysis
     """
-    prompt = f"""
-    You are an elite Texas Appellate Attorney. 
-    Case Name: {case_name}
-    
-    Examine the provided text from the court opinion:
-    {full_text}
-    
-    1. Is this a Family Law matter? (True/False)
-    2. Write a professional headline for a legal blog.
-    3. Identify the primary 'Legal Issue' (max 2 sentences).
-    4. Summarize 'The Holding' clearly for other attorneys.
-    5. Identify the case name, e.g. "In Re T.J.D." or "State v. Alexander"
-    6. Extract the name of the lower court from which the appeal was taken, e.g. "Court of Appeals for the Fourth District of Texas", "296th Judicial District Court, Collin County, Texas"
-    7. SEO TITLE: Under 60 characters.
-    8. SEO FOCUS KEYPHRASE: A 3-5 word phrase attorneys would search for.
-    9. META DESCRIPTION: Under 155 characters. Start with the most important legal conclusion.
-    
-    Return ONLY JSON:
-    {{
-        "family_law": bool,
-        "headline": "string",
-        "legal_issue": "string",
-        "holding": "string"
-        "case_name": "string",
-        "lower_court_name": "string",
-        "seo_title": "string",
-        "seo_focuskw": "string",
-        "meta_description": "string"
-    }}
-    """
-    response = client.chat.completions.create(
-        model=OPENAI_MODEL, # Using 4o for better legal reasoning
-        messages=[{"role": "system", "content": "You provide structured legal analysis."},
-                  {"role": "user", "content": prompt}],
-        response_format={ "type": "json_object" }
-    )
-    return json.loads(response.choices[0].message.content)  # type: ignore
+    prompt = case_analysis_user_prompt.format(case_name=case_name, opinion_text=full_text)
+    result = await case_analysis_agent.run(user_prompt=prompt)
+    return result.output
 
-def opinion_text(row: dict[str, Union[str, int, float]]) -> str:
+def opinion_text(row: OpinionTrackingInDB) -> str:
     """
     Retrieves the opinion text for a given case row.
     Arguments:
-        row -- A dictionary representing a row from the Google Sheet
+        row -- An instance of OpinionTrackingInDB representing a case
     Returns:
         Extracted opinion text
     """
-    pdf_path = os.path.join(OPINION_LOCAL_PATH, f"{row['Case Number']}.pdf")
+    pdf_path = os.path.join(OPINION_LOCAL_PATH, f"{row.case_number}.pdf")
     _text = get_pdf_text(pdf_path) if os.path.exists(pdf_path) else ""
     return _text
 
-def review_non_family_cases():
+async def review_non_family_cases():
     """
     Reviews cases marked as 'pending-review' to see if they have procedural relevance.
 
@@ -140,50 +101,26 @@ def review_non_family_cases():
     Returns:
         None
     """
-    # Get all records from the sheet
-    records = sheet.get_all_records()
-    
-    for i, row in enumerate(records):
-        # Only look at cases we haven't decided to blog on yet
-        if row['Status'] == 'pending-review':
-            case_name = row['Headline'] # Or use the Case Name column
-            
-            opinion_txt = opinion_text(row)
+    # Get all records that were not clearly family law cases and that are pending review
+    records, _ = opinion_repo.select_many(condition={"status": "pending-review", 'is_family_law': False})  # type: ignore
+    records: List[OpinionTrackingInDB]
+    for row in records:
+        case_name = row.headline
+        
+        opinion_txt = opinion_text(row)
+        prompt = family_angle_user_prompt.format(case_name=case_name, opinion_text=opinion_txt)
+        result = await family_angle_agent.run(user_prompt=prompt)
 
-            prompt = f"""
-            You are a Texas Litigation Strategist. 
-            Case: {case_name}
-            Content: {opinion_txt[:5000]}
-            
-            Even though this is NOT a family law case, does it contain a ruling on 
-            Texas Civil Procedure or Evidence that would be highly relevant to 
-            a Family Law litigator (e.g., discovery, expert witnesses, mandamus, 
-            summary judgment, or attorney's fees)?
-            
-            Return JSON:
-            {{
-                "is_procedurally_relevant": bool,
-                "reasoning": "string (1 sentence)",
-                "new_headline": "string (e.g., 'How this Commercial Discovery Ruling impacts Family Law')"
-            }}
-            """
-            
-            response = client.chat.completions.create(
-                model=OPENAI_MODEL,
-                messages=[{"role": "user", "content": prompt}],
-                response_format={ "type": "json_object" }
-            )
-            review = json.loads(response.choices[0].message.content)  # type: ignore
-            
-            # Update the Sheet
-            row_idx = i + 2 # +1 for 0-indexing, +1 for header
-            if review['is_procedurally_relevant']:
-                sheet.update_cell(row_idx, 2, "pending-blog") # Column 2 is Status
-                sheet.update_cell(row_idx, 4, review['new_headline']) # Update headline for the niche
-                print(f"Upgraded {row['Case Number']} to pending-blog.")
-            else:
-                sheet.update_cell(row_idx, 2, "rejected")
-                print(f"Permanently rejected {row['Case Number']}.")
+        review: FamilyAngle = result.output
+        # Update the Sheet
+        if review.is_procedurally_relevant:
+            row.status = "pending-blog"
+            row.headline = review.new_headline
+            logger.info("Upgraded %s to pending-blog.", row.case_number)
+        else:
+            row.status = "rejected"
+            logger.info("Permanently rejected %s.", row.case_number)
+        opinion_repo.update(row.id, row.model_dump(mode="json"))
 
 def download_pdf(url: str, case_number: str) -> str | None:
     """
@@ -202,4 +139,5 @@ def download_pdf(url: str, case_number: str) -> str | None:
         with open(full_path, 'wb') as f:
             f.write(response.content)
         return full_path
+    logger.error("Failed to download PDF from %s for case %s. Status code: %d", url, case_number, response.status_code)
     return None

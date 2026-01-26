@@ -12,11 +12,13 @@ from util.loggerfactory import LoggerFactory
 
 import logging
 
+LOGGER = LoggerFactory.create_logger(__name__)
+
 # Set the underlying libraries to DEBUG
 logging.getLogger("httpx").setLevel(logging.DEBUG)
 logging.getLogger("postgrest").setLevel(logging.DEBUG)
 
-LOGGER = LoggerFactory.create_logger(__name__)
+# LOGGER = LoggerFactory.create_logger(__name__)
 
 T = TypeVar("T", bound=BaseModel)
 

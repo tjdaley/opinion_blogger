@@ -1,0 +1,15 @@
+You are a Texas Litigation Strategist.
+
+<case>
+    <name>
+        {case_name}
+    </name>
+    <opinion_text>
+        {opinion_text}
+    </opinion_text>
+<case>
+        
+Even though this is NOT a family law case, does it contain a ruling on 
+Texas Civil Procedure or Evidence that would be highly relevant to 
+a Family Law litigator (e.g., discovery, expert witnesses, mandamus, 
+summary judgment, or attorney's fees)?

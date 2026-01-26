@@ -1,41 +1,42 @@
 """
 wp_uploader - A script to upload case law updates to WordPress using the REST API.
 """
-
-import os
-import json
+from typing import List
 import requests
 from requests.auth import HTTPBasicAuth
-import shutil
 import markdown
 from util.settings import settings
+from db.models.opinion_tracking import OpinionTrackingInDB
+from db.repositories.opinion_tracking import OpinionTrackingRepository
+from db.supabasemanager import SupabaseManager
+from util.loggerfactory import LoggerFactory
+
+logger = LoggerFactory.create_logger(__name__)
 
 # --- CONFIGURATION ---
-POSTS_LOCAL_PATH = settings.posts_local_path
 WP_BASE_URL = settings.wp_base_url
 WP_USERNAME = settings.wp_username
 WP_APP_PASSWORD = settings.wp_app_password
-PROCESSED_PATH = os.path.join(POSTS_LOCAL_PATH, "processed")
 AUTHOR_ID = int(settings.author_id)
-CATEGORY_IDS = settings.category_ids if isinstance(settings.category_ids, tuple) else (settings.category_ids)
-TAG_IDS = settings.tag_ids if isinstance(settings.tag_ids, tuple) else (settings.tag_ids)
+CATEGORY_IDS = settings.category_ids
+TAG_IDS = settings.tag_ids
 MEDIA_ID = int(settings.media_id)
 
-if not os.path.exists(PROCESSED_PATH):
-    os.makedirs(PROCESSED_PATH)
+manager = SupabaseManager()
+opinion_repo = OpinionTrackingRepository(manager)
 
-def upload_to_wordpress(json_data: dict[str, str]   ) -> bool:
+def upload_to_wordpress(post: OpinionTrackingInDB) -> bool:
     auth = HTTPBasicAuth(WP_USERNAME, WP_APP_PASSWORD)
     
     html_content = markdown.markdown(
-        json_data['body'],  # type: ignore
+        f"{post.body}\n\n<<{post.case_key}>>",  # type: ignore
         extensions=['extra', 'nl2br', 'sane_lists']
     )
     
     # Prepare the payload
     # Note: Yoast SEO fields are often handled via the 'meta' key
     payload = {  # type: ignore
-        "title": json_data['Headline'],
+        "title": post.headline,
         "content": html_content,
         "status": "draft",
         "author": AUTHOR_ID,
@@ -44,43 +45,39 @@ def upload_to_wordpress(json_data: dict[str, str]   ) -> bool:
         "comment_status": "closed",
         "featured_media": MEDIA_ID,
         "meta": {
-            "_yoast_wpseo_title": json_data.get('seo_title', json_data.get('Headline','')),  # type: ignore
-            "_yoast_wpseo_metadesc": json_data.get('meta_description', json_data.get('Legal Issue',''))[:156], # type: ignore
-            "_yoast_wpseo_focuskw": json_data.get('seo_focuskw', "Texas Family Law Case Update")  # type: ignore
+            "_yoast_wpseo_title": post.seo_title or post.headline,  # type: ignore
+            "_yoast_wpseo_metadesc": (post.meta_description or post.legal_issue)[:156], # type: ignore
+            "_yoast_wpseo_focuskw": post.seo_focus_kw or "Texas Family Law Case Update",  # type: ignore
+            "case_id": post.case_key or ''
         }
     }
 
     response = requests.post(f"{WP_BASE_URL}/posts", json=payload, auth=auth)  # type: ignore
     
     if response.status_code == 201:
-        print(f"✅ Success: Posted {json_data['Case Number']} as Draft.")
+        logger.info("{green}{bold}Success: Posted %s as Draft.", post.case_number)
         return True
     else:
-        print(f"❌ Error posting {json_data['Case Number']}: {response.text}")
+        logger.error("{red}{bold}Error posting %s: %s", post.case_number, response.text)
         return False
 
 def run_uploader():
-    files = [f for f in os.listdir(POSTS_LOCAL_PATH) if f.endswith('.json')]
+    posts, _ = opinion_repo.select_many(condition={"status": "pending-blog"})  # type: ignore
     
-    if not files:
-        print("No pending JSON drafts found.")
+    if not posts:
+        logger.info("{purple}No pending drafts found.")
         return
 
-    for filename in files:
-        file_path = os.path.join(POSTS_LOCAL_PATH, filename)
-        
-        with open(file_path, 'r') as f:
-            data: dict[str, str] = json.load(f)
-        
-        # We only want to upload cases that were flagged as pending-blog
-        if data.get('Status') == 'pending-blog':
-            success = upload_to_wordpress(data)
-            
-            if success:
-                # Move to processed folder
-                shutil.move(file_path, os.path.join(PROCESSED_PATH, filename))
+    posts: List[OpinionTrackingInDB]
+    for post in posts:
+        success = upload_to_wordpress(post)
+        if success:
+            post.status = 'blog-drafted'
+            opinion_repo.update(post.id, post.model_dump(mode="json"))
         else:
-            print(f"Skipping {filename} - Status is {data.get('Status')}")
+            logger.info("Skipping %s - Upload failed. Status is %s", post.case_number, post.status)
 
 if __name__ == "__main__":
+    logger.info("Starting WordPress uploader bot")
     run_uploader()
+    logger.info("WordPress uploader bot finished")

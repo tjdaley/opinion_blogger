@@ -4,6 +4,7 @@ logger_factory.py - This module contains the factory class for creating logger i
 import logging
 from typing import Optional
 from util.settings import settings
+from util.ansi_color_formatter import AnsiColorFormatter
 
 
 class LoggerFactory:
@@ -38,7 +39,8 @@ class LoggerFactory:
         result_logger.handlers.clear()
         result_logger.setLevel(getattr(logging, loglevel))
         handler = logging.StreamHandler()
-        handler.setFormatter(logging.Formatter(settings.log_format))
+        formatter = AnsiColorFormatter(settings.log_format, style='{')
+        handler.setFormatter(formatter)
         handler.setLevel(getattr(logging, loglevel))
         result_logger.addHandler(handler)
         result_logger.propagate = False

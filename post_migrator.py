@@ -1,19 +1,28 @@
-import json
+import asyncio
+import re
 from typing import List, Union
 import requests
 from markdownify import markdownify as md
 from openai import OpenAI
+from db.models.opinion_tracking import OpinionTrackingInDB
 from util.settings import settings
 from db.models.legal_subject import LegalSubjectInDB
 from db.models.court_opinion import CourtOpinion
 from db.supabasemanager import SupabaseManager
 from db.repositories.legal_subject import LegalSubjectRepository
 from db.repositories.court_opinion import OpinionRepository
+from agents.post_migratrion_agent import migration_extraction_agent, user_prompt as migration_user_prompt
+from util.loggerfactory import LoggerFactory
+
+logger = LoggerFactory.create_logger(__name__)
 
 # --- Database Setup ---
 DB_MANAGER = SupabaseManager()
 OPINIONS = OpinionRepository(DB_MANAGER)
 LEGAL_SUBJECTS = LegalSubjectRepository(DB_MANAGER)
+
+manager = SupabaseManager()
+opinion_repo = OpinionRepository(manager)
 
 # --- Configuration ---
 WP_URL = settings.wp_base_url
@@ -42,17 +51,20 @@ def get_posts_to_process(tag_slug: str) -> List[dict[str, str]]:
 
 def clean_text(text: str) -> str:
     """
-    Clean text by removing excessive whitespace and removing invalid unicode characters.
+    Clean text by removing invalid unicode characters.
     """
-    # Remove excessive whitespace
-    response = ' '.join(text.split())
-
     # Remove invalid unicode characters
-    response = response.encode('utf-8', 'ignore').decode('utf-8', 'ignore')
-
+    response = text.encode('utf-8', 'ignore').decode('utf-8', 'ignore')
     return response
 
-def process_workflow():
+def find_case_key(text: str) -> str:
+    # case_key is a UUID inside double angle brackets, e.g. "<<uuid>>"
+    match = re.search(r"<<([0-9a-fA-F-]{36})>>", text)
+    if match:
+        return match.group(1)
+    return ""
+
+async def process_workflow():
     categories_in_db: List[LegalSubjectInDB]
     categories_in_db, _ = LEGAL_SUBJECTS.select_many({})  # type: ignore
     defined_categories = [cat.id for cat in categories_in_db]
@@ -70,7 +82,7 @@ def process_workflow():
             # 0. See if we should skip due to prior error
             current_tags: list[int] = post['tags']  # type: ignore
             if tag_id_to_mark_error and tag_id_to_mark_error in current_tags:
-                print(f"Skipping post {post.get('id')} due to prior error tag.")
+                logger.info("Skipping post %s due to prior error tag.", post.get('id'))
                 continue
 
             # 1. Convert WP HTML to Clean Markdown
@@ -81,46 +93,39 @@ def process_workflow():
             # 2. AI Transformation
             # We pass the markdown to the AI so it can better identify structures
             headline = post['title']['rendered']  # type: ignore
-            
-            prompt = f"""
-            Act as a legal editor for JDBOT. Convert this blog post into the following JSON:
-            Keys: case_name, court, opinion_date, brief_summary, litigation_takeaway, slug, category, citation, opinion_link.
-            
-            Available Categories: {DEFINED_CATEGORIES}
-            
-            Important: The 'blog_body' must be the following Markdown content exactly.
-            
-            Headline: {headline}
-            Content: {markdown_body}
-            """
 
-            response = ai_client.chat.completions.create(
-                model="gpt-4o",
-                messages=[{"role": "system", "content": "You are a helpful assistant that outputs JSON."},
-                          {"role": "user", "content": prompt}],
-                response_format={"type": "json_object"}
+            case_key = find_case_key(markdown_body)
+            tracked_opinion: OpinionTrackingInDB = opinion_repo.select_one(condition={"case_key": case_key})  # type: ignore
+            if not tracked_opinion:
+                logger.warning("No tracked opinion found for case key: %s", case_key)
+                continue
+
+            prompt = migration_user_prompt.format(
+                headline=headline,
+                markdown_body=markdown_body,
+                defined_categories=DEFINED_CATEGORIES
             )
-            
-            structured_data = json.loads(response.choices[0].message.content)  # type: ignore
-
+            response = await migration_extraction_agent.run(user_prompt=prompt)
+            migration_data = response.output
             # 3. Save to Supabase
             opinion = CourtOpinion(
-                case_name=clean_text(structured_data['case_name']),
-                court=clean_text(structured_data['court']),
-                date=clean_text(structured_data['opinion_date']),
-                summary=clean_text(structured_data['brief_summary']),
-                litigation_takeaway=clean_text(structured_data['litigation_takeaway']),
-                slug=clean_text(structured_data['slug']),
-                category=clean_text(structured_data['category']),
-                citation=clean_text(structured_data['citation']),
-                opinion_link=clean_text(structured_data['opinion_link']),
+                case_name=clean_text(tracked_opinion.case_name),  # type: ignore
+                court=clean_text(tracked_opinion.court),  # type: ignore
+                date=clean_text(tracked_opinion.opinion_date),  # type: ignore
+                summary=clean_text(migration_data.brief_summary),
+                litigation_takeaway=clean_text(migration_data.litigation_takeaway),
+                slug=clean_text(migration_data.slug),
+                category=clean_text(migration_data.category),
+                citation=clean_text(migration_data.citation),
+                opinion_link=clean_text(tracked_opinion.opinion_link),  # type: ignore
                 blog_post=clean_text(markdown_body),
+                case_key=case_key,
                 needs_review=True
             )
 
             try:
                 OPINIONS.insert(opinion.model_dump(mode="json"))
-                print(f"Saved {structured_data['case_name']} to Supabase.")
+                logger.info("Saved %s to Supabase.", tracked_opinion.case_name)
 
                 # 4. Remove the tag from WordPress so it doesn't process again
                 current_tags: list[int] = post['tags']  # type: ignore
@@ -132,7 +137,7 @@ def process_workflow():
                             json={'tags': new_tags}, 
                             auth=(WP_USER, WP_APP_PASSWORD))
             except Exception as db_e:
-                print(f"DB Error on post {post.get('id')}: {db_e}")
+                logger.error("DB Error on post %s: %s", post.get('id'), db_e)
                 # Tag the post with error tag
                 current_tags: list[int] = post['tags']  # type: ignore
                 if tag_id_to_mark_error and tag_id_to_mark_error not in current_tags:
@@ -142,7 +147,8 @@ def process_workflow():
                             auth=(WP_USER, WP_APP_PASSWORD))
 
         except Exception as e:
-            print(f"Error on post {post.get('id')}: {e}")
+            logger.error("Error on post %s: %s", post.get('id'), e)
 
 if __name__ == "__main__":
-    process_workflow()
+    logger.info("Starting post migration workflow")
+    asyncio.run(process_workflow())

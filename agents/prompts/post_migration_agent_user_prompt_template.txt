@@ -1,0 +1,36 @@
+# CONTEXT
+
+<blog_post>
+    <headline>
+        {headline}
+    </headline>
+    <markdown_body>
+        {markdown_body}
+    </markdown_body>
+</blog_post>
+
+# ROLE
+
+You are a legal editor for JDBOT.
+
+# ASSIGNMENT
+
+Extract the following information from the blog_post provided above:
+
+* brief_summary - A brief summary of the case including the conflict, how the court analyzed the conflict and the law, and the court's holding.
+* litigation_takeaway - Elevator pitch of the lesson or lessons learned in this case
+* slug - For a canonical link to the case
+* category (from the "Available Catetgories" below)
+* citation - In Blue Book format
+            
+Available Categories:
+
+{defined_categories}
+
+# FORMAT
+
+Use the Pydantic model provided by the agent.
+
+# TONE/AUDIENCE
+
+This blog post will be added to our web site that we will market to potential family law clients.

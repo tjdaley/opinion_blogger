@@ -14,6 +14,8 @@ class CourtOpinion(BaseModel):
     category: str
     needs_review: bool = False
     blog_post: Optional[str] = None
+    case_key: Optional[str] = None
+
 
 class CourtOpinionInDB(CourtOpinion):
     id: int
