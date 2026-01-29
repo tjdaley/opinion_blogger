@@ -29,7 +29,7 @@ def upload_to_wordpress(post: OpinionTrackingInDB) -> bool:
     auth = HTTPBasicAuth(WP_USERNAME, WP_APP_PASSWORD)
     
     html_content = markdown.markdown(
-        f"{post.body}\n\n<<{post.case_key}>>",  # type: ignore
+        f"{post.body}\n\n~~{post.case_key}~~",  # type: ignore
         extensions=['extra', 'nl2br', 'sane_lists']
     )
     

@@ -24,7 +24,7 @@ T = TypeVar("T", bound=BaseModel)
 
 class DatabaseManager(ABC):
     @abstractmethod
-    def select_one(self, table:str, result_type: Type[T], condition: dict[str, Any]) -> T:
+    def select_one(self, table:str, result_type: Type[T], condition: dict[str, Any]) -> Optional[T]:
         pass
 
     @abstractmethod
@@ -65,13 +65,19 @@ class SupabaseManager(DatabaseManager):
         table:str,
         result_type: Type[T],
         condition: dict[str, Any],
-        ) -> T:
+        ) -> Optional[T]:
 
         query = self.client.table(table).select("*")
         for field, value in condition.items():
             query = query.eq(field, value)
 
-        result: APIResponse = query.single().execute()
+        try:
+            result: APIResponse = query.single().execute()
+        except APIError as e:
+            if e.code == 'PGRST116':  # No match found
+                return None
+            LOGGER.error("Error executing select_one query on table %s with condition %s: %s", table, condition, str(e))
+            raise
 
         if isinstance(result.data, dict):
             return result_type(**result.data)

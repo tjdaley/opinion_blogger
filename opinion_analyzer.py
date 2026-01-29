@@ -97,28 +97,37 @@ async def generate_blog_post(case_data: OpinionTrackingInDB, opinion_text: str) 
 async def generate_blog_posts():
     post_count = 0
 
-    records, _ = opinion_repo.select_many(condition={"status": "pending-blog"})  # type: ignore
-    records: List[OpinionTrackingInDB]
-    for row in records:
-        _text = opinion_text(row)
-        if not _text:
-            logger.warning("Skipping case %s due to missing opinion text.", row.case_number)
-            continue
-        post_body = await generate_blog_post(row, _text)
-        q_and_a = await generate_q_and_a(row, _text)
-        if post_body:
-            row.body = post_body
-            row.q_and_a = [qa.model_dump(mode="json") for qa in q_and_a]  # type: ignore (not writing to sheet)
-            post_count += 1
+    try:
+        records, _ = opinion_repo.select_many(condition={"status": "pending-blog"})  # type: ignore
+        records: List[OpinionTrackingInDB]
+        for row in records:
+            _text = opinion_text(row)
+            if not _text:
+                logger.warning("Skipping case %s due to missing opinion text.", row.case_number)
+                continue
+            logger.info("Generating blog post for case %s", row.case_number)
+            post_body = await generate_blog_post(row, _text)
+            logger.info("Generating Q&A for case %s", row.case_number)
+            q_and_a = await generate_q_and_a(row, _text)
+            if post_body:
+                row.body = post_body
+                row.q_and_a = [qa.model_dump(mode="json") for qa in q_and_a]  # type: ignore (not writing to sheet)
+                post_count += 1
 
-            filename = f"draft_{row.case_number}.json"
-            full_path = os.path.join(POSTS_LOCAL_PATH, filename)
-            with open(full_path, 'w') as f:
-                f.write(row.model_dump_json())
+                filename = f"draft_{row.case_number}.json"
+                full_path = os.path.join(POSTS_LOCAL_PATH, filename)
+                logger.info("Saving draft post to %s", full_path)
+                with open(full_path, 'w') as f:
+                    f.write(row.model_dump_json())
 
-            opinion_repo.update(row.id, row.model_dump(mode="json"))
+                logger.info("Updated database record for case %s", row.case_number)
+                opinion_repo.update(row.id, row.model_dump(mode="json"))
 
-    return POSTS_LOCAL_PATH, post_count
+        return POSTS_LOCAL_PATH, post_count
+    except Exception as e:
+        logger.error("Error generating blog posts: %s", e)
+        logger.exception(e)
+        return POSTS_LOCAL_PATH, post_count
 
 async def run_blogger_bot():
     # Generate the blog posts
