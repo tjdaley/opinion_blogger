@@ -18,9 +18,12 @@ WP_BASE_URL = settings.wp_base_url
 WP_USERNAME = settings.wp_username
 WP_APP_PASSWORD = settings.wp_app_password
 AUTHOR_ID = int(settings.author_id)
-CATEGORY_IDS = settings.category_ids
-TAG_IDS = settings.tag_ids
-MEDIA_ID = int(settings.media_id)
+SCOTX_CATEGORY_IDS = settings.scotx_category_ids
+SCOTX_TAG_IDS = settings.scotx_tag_ids
+SCOTX_MEDIA_ID = int(settings.scotx_media_id)
+COATX_CATEGORY_IDS = settings.coatx_category_ids
+COATX_TAG_IDS = settings.coatx_tag_ids
+COATX_MEDIA_ID = int(settings.coatx_media_id)
 
 manager = SupabaseManager()
 opinion_repo = OpinionTrackingRepository(manager)
@@ -40,14 +43,15 @@ def upload_to_wordpress(post: OpinionTrackingInDB) -> bool:
         "content": html_content,
         "status": "draft",
         "author": AUTHOR_ID,
-        "categories": CATEGORY_IDS,
-        "tags": TAG_IDS,
+        "categories": SCOTX_CATEGORY_IDS if post.court == "SCOTX" else COATX_CATEGORY_IDS,
+        "tags": SCOTX_TAG_IDS if post.court == "SCOTX" else COATX_TAG_IDS,
         "comment_status": "closed",
-        "featured_media": MEDIA_ID,
+        "featured_media": SCOTX_MEDIA_ID if post.court == "SCOTX" else COATX_MEDIA_ID,
         "meta": {
             "_yoast_wpseo_title": post.seo_title or post.headline,  # type: ignore
             "_yoast_wpseo_metadesc": (post.meta_description or post.legal_issue)[:156], # type: ignore
             "_yoast_wpseo_focuskw": post.seo_focus_kw or "Texas Family Law Case Update",  # type: ignore
+            "_yoast_wpseo_author": "Thomas J. Daley",
             "case_id": post.case_key or ''
         }
     }

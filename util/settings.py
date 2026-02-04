@@ -22,9 +22,12 @@ class Settings(BaseSettings):
     wp_username: str = "tdaley"
     wp_app_password: str = ""
     author_id: int = 3
-    category_ids: tuple[int, ...] = (0,0)
-    tag_ids: tuple[int, ...] = (0,0)
-    media_id: int = 771
+    scotx_category_ids: tuple[int, ...] = (0,0)
+    scotx_tag_ids: tuple[int, ...] = (0,0)
+    scotx_media_id: int = 771
+    coatx_category_ids: tuple[int, ...] = (0,0)
+    coatx_tag_ids: tuple[int, ...] = (0,0)
+    coatx_media_id: int = 771
 
     # For Copying from Blog to Landing Page
     wp_post_tag: str = "ok_to_publish"
@@ -34,6 +37,10 @@ class Settings(BaseSettings):
     # SCOTXBLOG Settings
     table_element_id: str = "stagingDateTable"
     scotx_url: str = "https://data.scotxblog.com/scotx/staging/decided"
+
+    # COA Web site Settings
+    coa_base_url: str = "https://search.txcourts.gov/"
+    coa_lookback_days: int = 10
 
     # Logging settings
     log_format: str = "%(asctime)s - %(name)-15s - %(levelname)-8s - %(message)s"

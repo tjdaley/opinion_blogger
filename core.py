@@ -94,6 +94,39 @@ def opinion_text(row: OpinionTrackingInDB) -> str:
 
 async def review_non_family_cases():
     """
+    Reviews 'pending-review' cases (including Criminal) for Family Law relevance.
+    """
+    records, _ = opinion_repo.select_many(
+        condition={"status": "pending-review", 'is_family_law': False}
+    )
+    records: List[OpinionTrackingInDB]
+    
+    for row in records:
+        case_name = row.headline
+        opinion_txt = opinion_text(row)
+        
+        # We use the updated strategist prompt here
+        prompt = family_angle_user_prompt.format(
+            case_name=case_name, 
+            opinion_text=opinion_txt
+        )
+        result = await family_angle_agent.run(user_prompt=prompt)
+
+        review: FamilyAngle = result.output
+        
+        if review.is_procedurally_relevant:
+            row.status = "pending-blog"
+            # We store the specific "angle" in the headline or a dedicated metadata field
+            row.headline = f"CROSSOVER: {review.new_headline}"
+            logger.info("Upgraded %s (Court: %s) to pending-blog.", row.case_number, row.court)
+        else:
+            row.status = "rejected"
+            logger.info("Permanently rejected %s.", row.case_number)
+            
+        opinion_repo.update(row.id, row.model_dump(mode="json"))
+
+async def xreview_non_family_cases():
+    """
     Reviews cases marked as 'pending-review' to see if they have procedural relevance.
 
     Arguments:
@@ -134,7 +167,23 @@ def download_pdf(url: str, case_number: str) -> str | None:
     """
     filename = f"{case_number}.pdf"
     full_path = os.path.join(OPINION_LOCAL_PATH, filename)
-    response = requests.get(url, timeout=15)
+
+    # Browser headers to avoid 403 blocks
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36',
+        'Accept': 'application/pdf,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'gzip, deflate, br, zstd',
+        'DNT': '1',
+        'Sec-CH-UA': '"Google Chrome";v="143", "Chromium";v="143", "Not A(Brand";v="24"',
+        'Sec-CH-UA-Mobile': '?0',
+        'Sec-CH-UA-Platform': '"Windows"',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'same-origin'
+    }
+
+    response = http.get(url, headers=headers, timeout=15)
     if response.status_code == 200:
         with open(full_path, 'wb') as f:
             f.write(response.content)

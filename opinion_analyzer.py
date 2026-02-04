@@ -4,8 +4,8 @@ import os
 from typing import List, Union
 import fitz  # pyright: ignore[reportMissingTypeStubs] # PyMuPDF
 from util.settings import settings
-from agents.q_and_a_agent import q_and_a_agent, user_prompt as q_and_a_user_prompt, QandA
-from agents.blog_post_agent import blog_post_agent, user_prompt as blog_post_user_prompt
+from agents.q_and_a_agent import get_q_and_a_agent, user_prompt as q_and_a_user_prompt, QandA
+from agents.blog_post_agent import get_blog_post_agent, user_prompt as blog_post_user_prompt
 from db.models.opinion_tracking import OpinionTrackingInDB
 from db.repositories.opinion_tracking import OpinionTrackingRepository
 from db.supabasemanager import SupabaseManager
@@ -57,10 +57,10 @@ async def generate_q_and_a(case_data: OpinionTrackingInDB, opinion_text: str) ->
     :rtype: List[QandA]
     """
     user_prompt = q_and_a_user_prompt.format(opinion_text=opinion_text)
-    result = await q_and_a_agent.run(user_prompt=user_prompt)
+    result = await get_q_and_a_agent().run(user_prompt=user_prompt)
     return result.output
 
-async def generate_blog_post(case_data: OpinionTrackingInDB, opinion_text: str) -> str:
+async def generate_blog_post(case_data: OpinionTrackingInDB, opinion_text: str) -> Union[str, None]:
     """
     Generates a professional blog post designed for attorney citation.
     """
@@ -91,7 +91,12 @@ async def generate_blog_post(case_data: OpinionTrackingInDB, opinion_text: str) 
         additional_instruction=additional_instruction
     )
 
-    result = await blog_post_agent.run(user_prompt=prompt)
+    try:
+        result = await get_blog_post_agent().run(user_prompt=prompt)
+    except Exception as e:
+        logger.error("Error generating blog post for case %s: %s", case_data.case_number, e)
+        logger.exception(e)
+        return None
     return result.output
 
 async def generate_blog_posts():
@@ -105,8 +110,13 @@ async def generate_blog_posts():
             if not _text:
                 logger.warning("Skipping case %s due to missing opinion text.", row.case_number)
                 continue
+
             logger.info("Generating blog post for case %s", row.case_number)
             post_body = await generate_blog_post(row, _text)
+            if not post_body:
+                logger.warning("Skipping case %s due to failure in blog post generation.", row.case_number)
+                continue
+
             logger.info("Generating Q&A for case %s", row.case_number)
             q_and_a = await generate_q_and_a(row, _text)
             if post_body:

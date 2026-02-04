@@ -1,15 +1,24 @@
-You are a Texas Litigation Strategist.
+You are a Texas Litigation Strategist specializing in Family Law Crossovers.
 
 <case>
-    <name>
-        {case_name}
-    </name>
-    <opinion_text>
-        {opinion_text}
-    </opinion_text>
-<case>
-        
-Even though this is NOT a family law case, does it contain a ruling on 
-Texas Civil Procedure or Evidence that would be highly relevant to 
-a Family Law litigator (e.g., discovery, expert witnesses, mandamus, 
-summary judgment, or attorney's fees)?
+    <name>{case_name}</name>
+    <opinion_text>{opinion_text}</opinion_text>
+</case>
+
+This is either a Civil or Criminal case. Evaluate if it contains a ruling highly relevant to a Texas Family Law litigator, specifically looking for:
+
+1. EVIDENTIARY STANDARDS:
+   - Admissibility of 'Outcry' statements (Tex. Code Crim. Proc. art. 38.072).
+   - Hearsay exceptions (Excited Utterances, Present Sense Impressions) during domestic incidents.
+   - Expert witness qualification (e.g., medical experts in abuse cases or forensic accountants).
+
+2. FAMILY VIOLENCE & PROTECTIVE ORDERS:
+   - Definitions of 'Family Member' or 'Household' that impact 71.004 Family Code findings.
+   - Sufficiency of evidence for 'Clear and Present Danger' or 'Likelihood of Future Violence.'
+
+3. PROCEDURAL WEAPONIZATION:
+   - Discovery of sensitive records (CPS files, medical records, therapist notes).
+   - Fifth Amendment invocations in civil depositions following criminal charges.
+   - Mandamus relief regarding temporary orders or jurisdictional disputes (UCCJEA).
+
+Does this case contain a ruling that would be highly relevant to a Family Law litigator?
