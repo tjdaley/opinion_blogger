@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod
+import re
 from typing import Any, Optional, Type, TypeVar
+from httpx import ConnectError
 from pydantic import BaseModel
 from supabase import create_client, Client
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
@@ -53,8 +55,20 @@ class SupabaseManager(DatabaseManager):
         self.key = settings.supabase_service_role_key
         if not self.url or not self.key:
             raise ValueError("SUPABASE_URL and SUPABASE_KEY must be set in .env")
-        self.client: Client = create_client(self.url, self.key)
-
+        try:
+            self.client: Client = create_client(self.url, self.key)
+            # Standard way to verify connection & credentials
+            self.client.auth.get_user() 
+            LOGGER.info("Successfully connected to Supabase.")
+        except ConnectError:
+            LOGGER.error("Failed to connect: Network unreachable.")
+            raise
+        except APIError as e:
+            LOGGER.error(f"Supabase API Error (check your key): {e}")
+            raise
+        except Exception as e:
+            LOGGER.error(f"Unexpected Supabase connection error: {e}")
+            raise
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=2, max=10),
@@ -169,6 +183,21 @@ class SupabaseManager(DatabaseManager):
                 LOGGER.error("Result of insert is empty: %s", result)
                 raise ValueError(f"Insert operation failed for table {table} with data: {data}")
             return result_type(**result.data[0])  # type: ignore
+        except APIError as e:
+            if e.code == '23505':  # Dulicate key
+                # e.details contains the key and value in this format: "Key (opinion_link)=(https://www.txcourts.gov/media/1461965/260010pc.pdf) already exists."
+                # Extract the Key ("opinion_link") and value ("https://www.txcourts...")
+                # Generate the regex and re code
+                match = re.search(r'Key \(([^)]+)\)=\(([^)]+)\) already exists', e.details or '')
+                if match:
+                    key_name = match.group(1)
+                    key_value = match.group(2)
+                    message = f"Duplicate key detected. Key: {key_name}, Value: {key_value}"
+                else:
+                    message = f"Duplicate key error {e.details}"
+                LOGGER.error("insert(): %s", message)
+                raise KeyError(message)
+            raise
         except Exception as e:
             LOGGER.error(f"Error inserting into {table}: {e}")
             LOGGER.exception(e)
@@ -241,6 +270,16 @@ class SupabaseManager(DatabaseManager):
         :return: Description
         :rtype: bool
         """
-        result = self.client.table(table).select("id", count=CountMethod.exact).eq(field, value).execute()
-        return (result.count or 0) > 0
+        try:
+            result = self.client.table(table).select("id", count=CountMethod.exact).eq(field, value).single().execute()
+            return (result.count or 0) > 0
+        except APIError as e:
+            if e.code == 'PGRST116':  # No match found
+                return False
+        except Exception as e:
+            LOGGER.error("exists(): %s", e)
+            if logging.getLevelName(LOGGER.getEffectiveLevel()) == "DEBUG":
+                LOGGER.exception(e)
+            raise
+        return False
     

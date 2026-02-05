@@ -79,6 +79,14 @@ async def process_workflow():
     tag_id_to_mark_success = get_tag_id(tag_to_mark_success)
     posts = get_posts_to_process(tag_to_publish)
     
+    def _tag_migration_error(post: dict[str, str]):
+        current_tags: list[int] = post['tags']  # type: ignore
+        if tag_id_to_mark_error and tag_id_to_mark_error not in current_tags:
+            current_tags.append(tag_id_to_mark_error)
+        requests.post(f"{WP_URL}/posts/{post['id']}", 
+                    json={'tags': current_tags}, 
+                    auth=(WP_USER, WP_APP_PASSWORD))
+
     for post in posts:
         try:
             # 0. See if we should skip due to prior error
@@ -99,9 +107,14 @@ async def process_workflow():
             headline = post['title']['rendered']  # type: ignore
 
             case_key = find_case_key(markdown_body)
-            tracked_opinion: Optional[OpinionTrackingInDB] = OPINION_TRACKINGS.select_one(condition={"case_key": case_key})
+            try:
+                tracked_opinion: Optional[OpinionTrackingInDB] = OPINION_TRACKINGS.select_one(condition={"case_key": case_key})
+            except Exception as e:
+                logger.error(e)
+                tracked_opinion = None
             if not tracked_opinion:
                 logger.warning("No tracked opinion found for case key: %s", case_key)
+                _tag_migration_error(post)
                 continue
             logger.info("Found tracked opinion for case key: %s", case_key)
 
@@ -146,13 +159,7 @@ async def process_workflow():
                             auth=(WP_USER, WP_APP_PASSWORD))
             except Exception as db_e:
                 logger.error("DB Error on post %s: %s", post.get('id'), db_e)
-                # Tag the post with error tag
-                current_tags: list[int] = post['tags']  # type: ignore
-                if tag_id_to_mark_error and tag_id_to_mark_error not in current_tags:
-                    current_tags.append(tag_id_to_mark_error)
-                requests.post(f"{WP_URL}/posts/{post['id']}", 
-                            json={'tags': current_tags}, 
-                            auth=(WP_USER, WP_APP_PASSWORD))
+                _tag_migration_error(post)
 
         except Exception as e:
             logger.error("Error on post %s: %s", post.get('id'), e)

@@ -100,8 +100,11 @@ async def run_scotx_bot():
             meta_description=analysis.meta_description,
             case_key=str(uuid4())
         )
-        opinion_repo.insert(opinion.model_dump(mode="json"))
-        logger.info("Processed %s: %s", case_num, analysis.headline)
+        try:
+            opinion_repo.insert(opinion.model_dump(mode="json"))
+            logger.info("Processed %s: %s", case_num, analysis.headline)
+        except Exception as e:
+            logger.error(e)
         
     # Follow up pass to see if any cases that weren't directly related to family law
     # might have a procedural or evidentiary element that is relevant to family law attorneys.

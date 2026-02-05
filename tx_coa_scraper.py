@@ -219,8 +219,11 @@ async def process_docket_page(coa_id: str, url: str, release_date: str):
                     case_key=str(uuid4())
                 )
                 
-                opinion_repo.insert(opinion.model_dump(mode="json"))
-                logger.info("Processed %s Case %s: %s", "Criminal" if "2" in suffix else "Civil", case_num, case_name)
+                try:
+                    opinion_repo.insert(opinion.model_dump(mode="json"))
+                    logger.info("Processed %s Case %s: %s", "Criminal" if "2" in suffix else "Civil", case_num, case_name)
+                except Exception as e:
+                    logger.error(e)
 
     except Exception as e:
         logger.error("Error processing docket page %s: %s", url, e)

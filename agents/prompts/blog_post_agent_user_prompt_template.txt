@@ -70,6 +70,9 @@
        (b) Content: Generate checklists, by subtopic, that practitioners can use to apply the holding of the case and how to avoid the downside of what happened to the non-prevailing party.
        (c) Content Style: Paragraph for the check list name, e.g. "Gather Your Evidence"; and bulleted list for items under that list.
        (d) Header Style: h2
+       (e) Sub-lists Header Text: Generate a meaningful checklist name
+       (f) Sub-lists Header Style: h3
+       (g) Sub-lists Items: In the bulleted lists, use Markdown bullets with proper line terminators so they translate to HTML correctly
     7. CITATION
        (a) Fixed Header Text: "Citation"
        (b) Content: Provide the full formal citation (e.g., *In re Marshall*, __ S.W.3d __).

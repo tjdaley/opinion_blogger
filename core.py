@@ -104,55 +104,32 @@ async def review_non_family_cases():
     for row in records:
         case_name = row.headline
         opinion_txt = opinion_text(row)
-        
-        # We use the updated strategist prompt here
-        prompt = family_angle_user_prompt.format(
-            case_name=case_name, 
-            opinion_text=opinion_txt
-        )
-        result = await family_angle_agent.run(user_prompt=prompt)
 
-        review: FamilyAngle = result.output
-        
-        if review.is_procedurally_relevant:
-            row.status = "pending-blog"
-            # We store the specific "angle" in the headline or a dedicated metadata field
-            row.headline = f"CROSSOVER: {review.new_headline}"
-            logger.info("Upgraded %s (Court: %s) to pending-blog.", row.case_number, row.court)
-        else:
-            row.status = "rejected"
-            logger.info("Permanently rejected %s.", row.case_number)
+        try:
+            # We use the updated strategist prompt here
+            prompt = family_angle_user_prompt.format(
+                case_name=case_name,
+                opinion_text=opinion_txt
+            )
+            result = await family_angle_agent.run(user_prompt=prompt)
+
+            review: FamilyAngle = result.output
+
+            if review.is_procedurally_relevant:
+                row.status = "pending-blog"
+                # We store the specific "angle" in the headline or a dedicated metadata field
+                row.headline = f"CROSSOVER: {review.new_headline}"
+                logger.info("Upgraded %s (Court: %s) to pending-blog.", row.case_number, row.court)
+            else:
+                row.status = "rejected"
+                logger.info("Permanently rejected %s.", row.case_number)
+
+        except Exception as e:
+            # Handle Gemini content filter blocks or other API errors
+            logger.error("Error analyzing case %s: %s. Marking for manual review.", row.case_number, e)
+            row.status = "pending-review"  # Keep in pending-review for manual review
+            continue
             
-        opinion_repo.update(row.id, row.model_dump(mode="json"))
-
-async def xreview_non_family_cases():
-    """
-    Reviews cases marked as 'pending-review' to see if they have procedural relevance.
-
-    Arguments:
-        None
-    Returns:
-        None
-    """
-    # Get all records that were not clearly family law cases and that are pending review
-    records, _ = opinion_repo.select_many(condition={"status": "pending-review", 'is_family_law': False})  # type: ignore
-    records: List[OpinionTrackingInDB]
-    for row in records:
-        case_name = row.headline
-        
-        opinion_txt = opinion_text(row)
-        prompt = family_angle_user_prompt.format(case_name=case_name, opinion_text=opinion_txt)
-        result = await family_angle_agent.run(user_prompt=prompt)
-
-        review: FamilyAngle = result.output
-        # Update the Sheet
-        if review.is_procedurally_relevant:
-            row.status = "pending-blog"
-            row.headline = review.new_headline
-            logger.info("Upgraded %s to pending-blog.", row.case_number)
-        else:
-            row.status = "rejected"
-            logger.info("Permanently rejected %s.", row.case_number)
         opinion_repo.update(row.id, row.model_dump(mode="json"))
 
 def download_pdf(url: str, case_number: str) -> str | None:

@@ -121,7 +121,7 @@ async def generate_blog_posts():
             q_and_a = await generate_q_and_a(row, _text)
             if post_body:
                 row.body = post_body
-                row.q_and_a = [qa.model_dump(mode="json") for qa in q_and_a]  # type: ignore (not writing to sheet)
+                row.q_and_a = q_and_a  # Pydantic will serialize automatically
                 post_count += 1
 
                 filename = f"draft_{row.case_number}.json"
