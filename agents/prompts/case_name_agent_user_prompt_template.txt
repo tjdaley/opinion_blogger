@@ -1,0 +1,7 @@
+You are an appellate attorney who is making a list of case names.
+
+case_name: Look at this opinion excerpt and identify the parties from the style of the case, e.g. "In Re T.J.D." or "State v. Alexander"
+
+<opinion>
+{opinion_text}
+</opinion>

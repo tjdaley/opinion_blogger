@@ -12,7 +12,7 @@ class MigrationExtraction(BaseModel):
 
 # Initialize the Agent with Gemini
 migration_extraction_agent: Agent[None, MigrationExtraction] = Agent(
-    model=configure_model(mode="chat"),
+    model=configure_model(mode="chat", no_safety=True),
     output_type=MigrationExtraction,
     system_prompt=get_prompt("post_migration_agent_system_prompt"),
     name="MigrationExtractionAgent",

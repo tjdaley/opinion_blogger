@@ -1,4 +1,3 @@
-from abc import ABC, abstractmethod
 import re
 from typing import Any, Optional, Type, TypeVar
 from httpx import ConnectError
@@ -9,6 +8,7 @@ from postgrest.base_request_builder import APIResponse
 from postgrest.types import CountMethod
 from postgrest.exceptions import APIError
 
+from db.databasemanager import DatabaseManager
 from util.settings import settings
 from util.loggerfactory import LoggerFactory
 
@@ -16,38 +16,7 @@ import logging
 
 LOGGER = LoggerFactory.create_logger(__name__)
 
-# Set the underlying libraries to DEBUG
-logging.getLogger("httpx").setLevel(logging.DEBUG)
-logging.getLogger("postgrest").setLevel(logging.DEBUG)
-
-# LOGGER = LoggerFactory.create_logger(__name__)
-
 T = TypeVar("T", bound=BaseModel)
-
-class DatabaseManager(ABC):
-    @abstractmethod
-    def select_one(self, table:str, result_type: Type[T], condition: dict[str, Any]) -> Optional[T]:
-        pass
-
-    @abstractmethod
-    def select_many(self, table:str, result_type: Type[T], condition: dict[str, Any], sort_by: Optional[str] = None, sort_direction: str = "asc", start: Optional[int] = None, end: Optional[int] = None) -> tuple[list[T], int]:
-        pass
-
-    @abstractmethod
-    def insert(self, table:str, data: dict[str, Any], result_type: Type[T]) -> T:
-        pass
-
-    @abstractmethod
-    def update(self, table:str, record_id: Any, data: dict[str, Any], result_type: Type[T]) -> T:
-        pass
-
-    @abstractmethod
-    def delete(self, table:str, record_id: Any) -> bool:
-        pass
-
-    @abstractmethod
-    def exists(self, table:str, field: str, value: Any) -> bool:
-        pass
 
 class SupabaseManager(DatabaseManager):
     def __init__(self):
@@ -83,7 +52,10 @@ class SupabaseManager(DatabaseManager):
 
         query = self.client.table(table).select("*")
         for field, value in condition.items():
-            query = query.eq(field, value)
+            if value is None:
+                query = query.is_(field, None)
+            else:
+                query = query.eq(field, value)
 
         try:
             result: APIResponse = query.single().execute()
@@ -144,7 +116,10 @@ class SupabaseManager(DatabaseManager):
         query = self.client.table(table).select("*")
 
         for field, value in condition.items():
-            query = query.eq(field, value)
+            if value is None:
+                query = query.is_(field, None)
+            else:
+                query = query.eq(field, value)
         if sort_by:
             query = query.order(sort_by, desc=(sort_direction.lstrip().lower() == "desc"))
         if start is not None and end is not None:
@@ -184,7 +159,7 @@ class SupabaseManager(DatabaseManager):
                 raise ValueError(f"Insert operation failed for table {table} with data: {data}")
             return result_type(**result.data[0])  # type: ignore
         except APIError as e:
-            if e.code == '23505':  # Dulicate key
+            if e.code == '23505':  # Duplicate key
                 # e.details contains the key and value in this format: "Key (opinion_link)=(https://www.txcourts.gov/media/1461965/260010pc.pdf) already exists."
                 # Extract the Key ("opinion_link") and value ("https://www.txcourts...")
                 # Generate the regex and re code

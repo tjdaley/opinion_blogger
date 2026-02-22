@@ -13,10 +13,10 @@ logger = LoggerFactory.create_logger(__name__)
 
 async def main():
     """Main async function to run all scraper and analysis tasks."""
-    await scrape_tx_courts()
-    await scrape_coa_opinions()
+    #await scrape_tx_courts()
+    #await scrape_coa_opinions()
     await run_blogger_bot()
-    run_uploader()
+    #run_uploader()
 
 
 if __name__ == "__main__":

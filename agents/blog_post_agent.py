@@ -13,7 +13,7 @@ def get_blog_post_agent() -> Agent[None, str]:
     global _blog_post_agent
     if _blog_post_agent is None:
         _blog_post_agent = Agent(
-            model=configure_model(mode="chat"),
+            model=configure_model(mode="chat", no_safety=True),
             output_type=str,
             system_prompt=get_prompt("blog_post_agent_system_prompt"),
             name="BlogPostAgent",

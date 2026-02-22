@@ -4,10 +4,13 @@ from typing import List, Optional, Union
 import requests
 from markdownify import markdownify as md
 from openai import OpenAI
+from google.oauth2 import service_account
+from googleapiclient.discovery import build  # type: ignore
+
 from db.models.opinion_tracking import OpinionTrackingInDB
 from util.settings import settings
 from db.models.legal_subject import LegalSubjectInDB
-from db.models.court_opinion import CourtOpinion
+from db.models.court_opinion import CourtOpinion, CourtOpinionInDB
 from db.models.opinion_tracking import OpinionTrackingInDB
 from db.supabasemanager import SupabaseManager
 from db.repositories.legal_subject import LegalSubjectRepository
@@ -49,6 +52,26 @@ def get_posts_to_process(tag_slug: str) -> List[dict[str, str]]:
     posts_resp = requests.get(f"{WP_URL}/posts", params=params, auth=(WP_USER, WP_APP_PASSWORD))
     return posts_resp.json()
 
+def get_posts_to_index() -> List[CourtOpinionInDB]:
+    """Fetch opinions that need Google indexing."""
+    opinions, _ = OPINIONS.select_many({"needs_review": False, "google_index_requested_at": None}, start=0, end=1)
+    return opinions
+
+def opinion_url(opinion: CourtOpinionInDB) -> str:
+    """Construct the URL for a given opinion."""
+    return f"https://www.txfamlaw.com/opinions/{opinion.slug}"
+
+def index_opinions_with_google():
+    """Notify Google to index opinions that haven't been indexed yet."""
+    opinions_to_index = get_posts_to_index()
+    for opinion in opinions_to_index:
+        url = opinion_url(opinion)
+        try:
+            notify_google_indexing(url)
+            OPINIONS.update_google_index_requested_at(opinion.slug)
+        except Exception as e:
+            logger.error(f"Failed to notify Google for {url}: {e}")
+
 def clean_text(text: Union[str, None]) -> str:
     """
     Clean text by removing invalid unicode characters.
@@ -65,6 +88,23 @@ def find_case_key(text: str) -> str:
     if match:
         return match.group(1)
     return ""
+
+# --- NEW GOOGLE INDEXING CONFIG ---
+GOOGLE_CREDENTIALS_FILE = settings.json_keyfile
+SCOPES = ["https://www.googleapis.com/auth/indexing"]
+
+def notify_google_indexing(url: str):
+    """Pushes a URL to Google's real-time indexing queue."""
+    try:
+        credentials = service_account.Credentials.from_service_account_file(
+            GOOGLE_CREDENTIALS_FILE, scopes=SCOPES
+        )
+        service = build("indexing", "v3", credentials=credentials)
+        body = {"url": url, "type": "URL_UPDATED"}
+        _ = service.urlNotifications().publish(body=body).execute()
+        logger.info(f"Google notified: {url}")
+    except Exception as e:
+        logger.error(f"Failed to notify Google: {e}")
 
 async def process_workflow():
     categories_in_db: List[LegalSubjectInDB]
@@ -139,7 +179,8 @@ async def process_workflow():
                 opinion_link=clean_text(tracked_opinion.opinion_link),
                 blog_post=clean_text(markdown_body),
                 case_key=case_key,
-                needs_review=True
+                needs_review=True,
+                q_and_a=tracked_opinion.q_and_a
             )
 
             try:
@@ -164,6 +205,8 @@ async def process_workflow():
         except Exception as e:
             logger.error("Error on post %s: %s", post.get('id'), e)
             logger.exception(e)
+
+    index_opinions_with_google()
 
 if __name__ == "__main__":
     logger.info("Starting post migration workflow")

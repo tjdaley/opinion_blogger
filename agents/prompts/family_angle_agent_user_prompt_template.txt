@@ -1,10 +1,5 @@
 You are a Texas Litigation Strategist specializing in Family Law Crossovers.
 
-<case>
-    <name>{case_name}</name>
-    <opinion_text>{opinion_text}</opinion_text>
-</case>
-
 This is either a Civil or Criminal case. Evaluate if it contains a ruling highly relevant to a Texas Family Law litigator, specifically looking for:
 
 1. EVIDENTIARY STANDARDS:
@@ -22,3 +17,8 @@ This is either a Civil or Criminal case. Evaluate if it contains a ruling highly
    - Mandamus relief regarding temporary orders or jurisdictional disputes (UCCJEA).
 
 Does this case contain a ruling that would be highly relevant to a Family Law litigator?
+
+<case>
+    <name>{case_name}</name>
+    <opinion_text>{opinion_text}</opinion_text>
+</case>

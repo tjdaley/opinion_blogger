@@ -1,14 +1,3 @@
-# CONTEXT
-
-<blog_post>
-    <headline>
-        {headline}
-    </headline>
-    <markdown_body>
-        {markdown_body}
-    </markdown_body>
-</blog_post>
-
 # ROLE
 
 You are a legal editor for JDBOT.
@@ -34,3 +23,14 @@ Use the Pydantic model provided by the agent.
 # TONE/AUDIENCE
 
 This blog post will be added to our web site that we will market to potential family law clients.
+
+# CONTEXT
+
+<blog_post>
+    <headline>
+        {headline}
+    </headline>
+    <markdown_body>
+        {markdown_body}
+    </markdown_body>
+</blog_post>

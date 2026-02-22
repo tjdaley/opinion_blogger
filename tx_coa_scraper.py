@@ -110,7 +110,8 @@ async def scrape_coa_opinions():
 
             if not links:
                 logger.warning("No navigable date links found. Skipping %s", coa)
-            
+                continue
+
             for link in links:  # type: ignore
                 date_text = link.get_text(strip=True)  # type: ignore
                 if not date_text:
@@ -118,7 +119,10 @@ async def scrape_coa_opinions():
                 logger.info("--- Processing Date: %s ---", date_text)  # type: ignore
                 if date_text and is_recent(date_text):  # type: ignore
                     docket_url = urljoin(BASE_URL, link['href'])  # type: ignore
+                    logger.info("Found recent date %s. Processing docket page: %s", date_text, docket_url)  # type: ignore
                     await process_docket_page(coa, docket_url, date_text)  # type: ignore
+                else:
+                    logger.info("Skipping date %s as it is outside the lookback window.", date_text)  # type: ignore
                     
         except Exception as e:
             logger.error("Error reaching index for %s: %s", coa, e)
@@ -157,6 +161,7 @@ async def process_docket_page(coa_id: str, url: str, release_date: str):
         for suffix in table_ids:
             table = soup.find('table', id=lambda x: x and x.endswith(suffix))  # type: ignore
             if not table:
+                logger.warning("Table with suffix %s not found on page. Skipping.", suffix)
                 continue
 
             rows = table.find_all('tr', class_=['rgRow', 'rgAltRow'])
@@ -193,10 +198,13 @@ async def process_docket_page(coa_id: str, url: str, release_date: str):
 
                 # --- DOWNLOAD & ANALYSIS ---
                 pdf_path = download_pdf(pdf_url, case_num)
-                if not pdf_path: continue
+                if not pdf_path:
+                    logger.error("Failed to download PDF for case %s. URL: %s", case_num, pdf_url)
+                    continue
                 
                 opinion_text = get_pdf_text(pdf_path)
                 analysis = await analyze_with_full_text(case_name, opinion_text)
+                logger.info("Analysis for case %s: %s", case_num, analysis)
                 
                 # --- DB INSERTION ---
                 status = "pending-blog" if analysis.family_law else "pending-review"
@@ -211,7 +219,7 @@ async def process_docket_page(coa_id: str, url: str, release_date: str):
                     processed_at=datetime.now(),
                     court=coa_id.upper(),
                     opinion_date=datetime.strptime(release_date, "%m/%d/%Y").date(),
-                    case_name=case_name,
+                    case_name=analysis.case_name or case_name,
                     lower_court_name=lower_court,
                     seo_title=analysis.seo_title,
                     seo_focus_kw=analysis.seo_focuskw,
@@ -223,7 +231,7 @@ async def process_docket_page(coa_id: str, url: str, release_date: str):
                     opinion_repo.insert(opinion.model_dump(mode="json"))
                     logger.info("Processed %s Case %s: %s", "Criminal" if "2" in suffix else "Civil", case_num, case_name)
                 except Exception as e:
-                    logger.error(e)
+                    logger.error("Error inserting opinion for case %s: %s", case_num, e)
 
     except Exception as e:
         logger.error("Error processing docket page %s: %s", url, e)
