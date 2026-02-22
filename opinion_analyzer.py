@@ -3,8 +3,8 @@ from datetime import datetime
 import json
 import os
 from typing import List, Union
-import fitz
-import requests  # pyright: ignore[reportMissingTypeStubs] # PyMuPDF
+import fitz  # pyright: ignore[reportMissingTypeStubs] # PyMuPDF
+import requests
 from util.settings import settings
 from agents.q_and_a_agent import get_q_and_a_agent, user_prompt as q_and_a_user_prompt, QandA
 from agents.blog_post_agent import get_blog_post_agent, user_prompt as blog_post_user_prompt
