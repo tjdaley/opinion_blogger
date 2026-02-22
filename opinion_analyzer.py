@@ -286,15 +286,15 @@ async def generate_blog_posts():
 
 async def run_blogger_bot():
     # Generate the blog posts
-    #logger.info("Generating draft blog posts")
-    #saved_as, count = await generate_blog_posts()
-    #logger.info("Drafted %d blog posts, saved to %s", count, saved_as)
-    #logger.info("Correcting case names for opinions")
-    #await correct_case_name_for_opinions()
-    logger.info("Generating Q&A for opinions")
-    await correct_q_and_a_for_opinions()
-    logger.info("Migrating Q&A for opinions")
-    await migrate_q_and_a_for_opinions()
+    logger.info("Generating draft blog posts")
+    saved_as, count = await generate_blog_posts()
+    logger.info("Drafted %d blog posts, saved to %s", count, saved_as)
+    # logger.info("Correcting case names for opinions")
+    # await correct_case_name_for_opinions()
+    # logger.info("Generating Q&A for opinions")
+    # await correct_q_and_a_for_opinions()
+    # logger.info("Migrating Q&A for opinions")
+    # await migrate_q_and_a_for_opinions()
 
 if __name__ == "__main__":
     logger.info("Starting blogger bot")
