@@ -3,12 +3,14 @@ beautifulsoup4
 gspread
 markdown
 markdownify
+numpy
 oauth2client
 openai
 pydantic
 pydantic-ai
 pydantic-settings
 pymupdf
+scikit-learn
 supabase
 postgrest
 tenacity

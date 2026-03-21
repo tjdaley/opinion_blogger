@@ -4,6 +4,7 @@ db/repositories/court_opinion.py - Repository for CourtOpinion model using Supab
 import datetime
 from typing import Union
 
+from db.databasemanager import NOT_NULL
 from db.models.court_opinion import CourtOpinionInDB
 from db.repositories.base_repo import BaseRepository
 from db.supabasemanager import DatabaseManager
@@ -11,6 +12,22 @@ from db.supabasemanager import DatabaseManager
 class OpinionRepository(BaseRepository[CourtOpinionInDB]):
     def __init__(self, manager: DatabaseManager):
         super().__init__(manager, "court_opinions", CourtOpinionInDB)
+
+    def get_opinions_with_qa(self, page_size: int = 500) -> list[CourtOpinionInDB]:
+        """Fetch all opinions that have non-null q_and_a, handling pagination internally."""
+        all_results: list[CourtOpinionInDB] = []
+        offset = 0
+        while True:
+            batch, _ = self.select_many(
+                condition={"q_and_a": NOT_NULL},
+                start=offset,
+                end=offset + page_size - 1,
+            )
+            all_results.extend(batch)
+            if len(batch) < page_size:
+                break
+            offset += page_size
+        return all_results
 
     def get_by_slug(self, slug: str) -> Union[CourtOpinionInDB, None]:
         return self.manager.select_one(self.table_name, self.model_class, {"slug": slug})
@@ -31,3 +48,9 @@ class OpinionRepository(BaseRepository[CourtOpinionInDB]):
             opinion.model_dump(mode="json"),
             self.model_class
         )
+
+    def delete_by_case_key(self, case_key: str) -> None:
+        case = self.manager.select_one(self.table_name, self.model_class, {"case_key": case_key})
+        if not case:
+            raise ValueError(f"No opinion found with case_key: {case_key}")
+        self.manager.delete(self.table_name, case.id)

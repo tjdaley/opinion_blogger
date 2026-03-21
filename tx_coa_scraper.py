@@ -4,10 +4,9 @@ from bs4 import BeautifulSoup, ResultSet
 from bs4.element import NavigableString
 from uuid import uuid4
 
-from core import download_pdf, get_pdf_text, analyze_with_full_text, http
+from core import download_pdf, get_pdf_text, analyze_with_full_text, http, BROWSER_HEADERS
 from db.models.opinion_tracking import OpinionTracking
-from db.repositories.opinion_tracking import OpinionTrackingRepository
-from db.supabasemanager import SupabaseManager
+from db.connection import opinion_tracking_repo
 from util.loggerfactory import LoggerFactory
 from util.settings import settings
 
@@ -17,9 +16,6 @@ logger = LoggerFactory.create_logger(__name__, "DEBUG")
 BASE_URL = settings.coa_base_url
 COA_LIST = [f"coa{i:02d}" for i in range(1, 15)]
 LOOKBACK_DAYS = settings.coa_lookback_days
-
-manager = SupabaseManager()
-opinion_repo = OpinionTrackingRepository(manager)
 
 def is_recent(date_str: str) -> bool:
     """Checks if the date string (MM/DD/YYYY) is within the 10-day lookback window."""
@@ -35,25 +31,14 @@ async def scrape_coa_opinions():
     for coa in COA_LIST:
         index_url = f"{BASE_URL}DocketSrch.aspx?coa={coa}"
         logger.info("Checking court: %s at %s", coa.upper(), index_url)
-        
+
         try:
             # Headers to mimic a real browser and avoid 403 blocks
             headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-                'Accept-Language': 'en-US,en;q=0.9',
-                'Accept-Encoding': 'gzip, deflate, br, zstd',
+                **BROWSER_HEADERS,
                 'Cache-Control': 'no-cache',
                 'Pragma': 'no-cache',
-                'DNT': '1',
                 'Upgrade-Insecure-Requests': '1',
-                'Sec-CH-UA': '"Google Chrome";v="143", "Chromium";v="143", "Not A(Brand";v="24"',
-                'Sec-CH-UA-Mobile': '?0',
-                'Sec-CH-UA-Platform': '"Windows"',
-                'Sec-Fetch-Dest': 'document',
-                'Sec-Fetch-Mode': 'navigate',
-                'Sec-Fetch-Site': 'none',
-                'Sec-Fetch-User': '?1',
                 'Priority': 'u=0, i'
             }
 
@@ -123,7 +108,7 @@ async def scrape_coa_opinions():
                     await process_docket_page(coa, docket_url, date_text)  # type: ignore
                 else:
                     logger.info("Skipping date %s as it is outside the lookback window.", date_text)  # type: ignore
-                    
+
         except Exception as e:
             logger.error("Error reaching index for %s: %s", coa, e)
 
@@ -131,33 +116,23 @@ async def process_docket_page(coa_id: str, url: str, release_date: str):
     """Scrapes both Civil and Criminal tables for a specific date."""
     logger.info("Processing Docket: %s for %s (%s)", release_date, coa_id.upper(), url)
     try:
-        # Use same headers as main scraper to avoid 403 blocks
+        # Use shared headers with page-specific overrides
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Accept-Encoding': 'gzip, deflate, br, zstd',
+            **BROWSER_HEADERS,
             'Cache-Control': 'no-cache',
             'Pragma': 'no-cache',
-            'DNT': '1',
             'Upgrade-Insecure-Requests': '1',
-            'Sec-CH-UA': '"Google Chrome";v="143", "Chromium";v="143", "Not A(Brand";v="24"',
-            'Sec-CH-UA-Mobile': '?0',
-            'Sec-CH-UA-Platform': '"Windows"',
-            'Sec-Fetch-Dest': 'document',
-            'Sec-Fetch-Mode': 'navigate',
             'Sec-Fetch-Site': 'same-origin',
-            'Sec-Fetch-User': '?1',
             'Referer': f'{BASE_URL}DocketSrch.aspx?coa={coa_id}'
         }
 
         resp = http.get(url, headers=headers, timeout=20)
         soup = BeautifulSoup(resp.text, 'html.parser')
-        
+
         # Target both 'Civil Causes Decided' and 'Criminal Causes Decided' tables
         # Based on HTML, these use RadGrid formatting with specific suffixes
-        table_ids = ['grdDocket_ctl00', 'grdDocket2_ctl00'] 
-        
+        table_ids = ['grdDocket_ctl00', 'grdDocket2_ctl00']
+
         for suffix in table_ids:
             table = soup.find('table', id=lambda x: x and x.endswith(suffix))  # type: ignore
             if not table:
@@ -168,14 +143,14 @@ async def process_docket_page(coa_id: str, url: str, release_date: str):
             for row in rows:
                 tds = row.find_all('td')
                 if len(tds) < 4: continue
-                
+
                 # --- METADATA EXTRACTION ---
                 # Cell 0: Case Number and PDF Link
                 case_link_tag = tds[0].find('a', href=lambda x: x and "Case.aspx" in x)  # type: ignore
                 if not case_link_tag: continue
                 case_num = case_link_tag.get_text(strip=True)
 
-                if opinion_repo.exists("case_number", case_num):
+                if opinion_tracking_repo.exists("case_number", case_num):
                     logger.info("Case %s already exists. Skipping.", case_num)
                     continue
 
@@ -188,7 +163,7 @@ async def process_docket_page(coa_id: str, url: str, release_date: str):
                 style_cell = tds[1]
                 # Extract bolded text (Party names)
                 case_name = style_cell.find('span').get_text(strip=True) if style_cell.find('span') else style_cell.get_text(strip=True)   # type: ignore
-                
+
                 # Lower court name is typically after the <br/>
                 full_style_text = style_cell.get_text("|", strip=True)
                 lower_court = full_style_text.split("|")[-1] if "|" in full_style_text else "Unknown"
@@ -201,11 +176,11 @@ async def process_docket_page(coa_id: str, url: str, release_date: str):
                 if not pdf_path:
                     logger.error("Failed to download PDF for case %s. URL: %s", case_num, pdf_url)
                     continue
-                
+
                 opinion_text = get_pdf_text(pdf_path)
                 analysis = await analyze_with_full_text(case_name, opinion_text)
                 logger.info("Analysis for case %s: %s", case_num, analysis)
-                
+
                 # --- DB INSERTION ---
                 status = "pending-blog" if analysis.family_law else "pending-review"
                 opinion = OpinionTracking(
@@ -220,15 +195,16 @@ async def process_docket_page(coa_id: str, url: str, release_date: str):
                     court=coa_id.upper(),
                     opinion_date=datetime.strptime(release_date, "%m/%d/%Y").date(),
                     case_name=analysis.case_name or case_name,
-                    lower_court_name=lower_court,
+                    lower_court_name=analysis.lower_court_name or lower_court,
                     seo_title=analysis.seo_title,
                     seo_focus_kw=analysis.seo_focuskw,
                     meta_description=analysis.meta_description,
-                    case_key=str(uuid4())
+                    case_key=str(uuid4()),
+                    opinion_text=opinion_text
                 )
-                
+
                 try:
-                    opinion_repo.insert(opinion.model_dump(mode="json"))
+                    opinion_tracking_repo.insert(opinion.model_dump(mode="json"))
                     logger.info("Processed %s Case %s: %s", "Criminal" if "2" in suffix else "Civil", case_num, case_name)
                 except Exception as e:
                     logger.error("Error inserting opinion for case %s: %s", case_num, e)

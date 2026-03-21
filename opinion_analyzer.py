@@ -3,105 +3,88 @@ from datetime import datetime
 import json
 import os
 from typing import List, Union
-import fitz  # pyright: ignore[reportMissingTypeStubs] # PyMuPDF
 import requests
-from util.settings import settings
+from core import get_pdf_text, opinion_text, OPINION_LOCAL_PATH, POSTS_LOCAL_PATH
 from agents.q_and_a_agent import get_q_and_a_agent, user_prompt as q_and_a_user_prompt, QandA
 from agents.blog_post_agent import get_blog_post_agent, user_prompt as blog_post_user_prompt
 from agents.case_name_agent import get_case_name_agent, user_prompt as case_name_user_prompt
-from db.models.court_opinion import CourtOpinionInDB
 from db.models.opinion_tracking import OpinionTrackingInDB
-from db.repositories.court_opinion import OpinionRepository
-from db.repositories.opinion_tracking import OpinionTrackingRepository
-from db.supabasemanager import SupabaseManager
+from db.connection import opinion_tracking_repo, court_opinion_repo
 from util.loggerfactory import LoggerFactory
+from util.settings import settings
 
 logger = LoggerFactory.create_logger(__name__)
 
-# --- CONFIGURATION ---
-OPINION_LOCAL_PATH = settings.opinion_local_path
-POSTS_LOCAL_PATH = settings.posts_local_path
-MAX_OPINION_SIZE = settings.max_opinion_size
-
-# --- DB SETUP ---
-manager = SupabaseManager()
-opinion_repo = OpinionTrackingRepository(manager)
-court_opinion_repo = OpinionRepository(manager)
-
-# Prepare output paths
-for path in [OPINION_LOCAL_PATH, POSTS_LOCAL_PATH]:
-    if not os.path.exists(path):
-        os.makedirs(path)
-
-def get_pdf_text(filepath: str, page_limit: int = 15) -> str:
-    """
-    Extracts the first MAX_OPINION_SIZE characters from the PDF for AI analysis.
-
-    :param filepath: Path to the PDF file
-    :param page_limit: Maximum number of pages to read from the PDF (default is 15)
-    """
-    text = ""
-    try:
-        with fitz.open(filepath) as doc:
-            # We usually only need the first few pages for the summary/holding
-            for page in doc[:page_limit]:
-                text += page.get_text()  # type: ignore
-    except Exception as e:
-        logger.error("Error reading PDF %s: %s", filepath, e)
-    return text[:MAX_OPINION_SIZE]  # type: ignore
-
-def opinion_text(row: OpinionTrackingInDB, page_limit: int = 15) -> Union[str, None]:
-    """
-    Retrieves the opinion text for a given case, either from local storage or by downloading the PDF.
-    
-    :param row: The opinion tracking database row containing case information
-    :param page_limit: The maximum number of pages to read from the PDF (default is 15)
-    :return: The extracted opinion text or None if it cannot be retrieved
-    """
-    pdf_path = os.path.join(OPINION_LOCAL_PATH, f"{row.case_number}.pdf")
-    _text = get_pdf_text(pdf_path, page_limit=page_limit) if os.path.exists(pdf_path) else ""
-    return _text
-
-def opinion_text_from_court_opinion(opinion: CourtOpinionInDB, page_limit: int = 15) -> Union[str, None]:
+def opinion_text_from_court_opinion(case_key: str, page_limit: int = 15) -> Union[str, None]:
     """
     Retrieves the opinion text for a given CourtOpinionInDB entry by finding the corresponding OpinionTrackingInDB and extracting the text.
-    :param opinion: The CourtOpinionInDB entry containing case information
+    :param case_key: The case key of the opinion
     :param page_limit: The maximum number of pages to read from the PDF (default is 15)
     :return: The extracted opinion text or None if it cannot be retrieved
     """
-    tracked_opinion = opinion_repo.select_one(condition={"case_key": opinion.case_key})
+    tracked_opinion = opinion_tracking_repo.select_one(condition={"case_key": case_key})
     return opinion_text(tracked_opinion, page_limit=page_limit) if tracked_opinion else None
 
-async def make_case_name(case_data: CourtOpinionInDB) -> Union[str, None]:
+async def make_case_name(case_key: Union[str, None]) -> Union[str, None]:
     """
     Uses AI to make the case name
 
     This is necessary because the case name is often formatted inconsistently in the raw data, which can cause issues with citation and SEO. By using AI to generate a clean, consistent case name, we can improve the quality of our blog posts and make them more useful for attorneys.
-    :param case_data: The CourtOpinionInDB entry containing case information
+    :param case_key: The case key of the opinion
+
     :return: The corrected case name or None if it cannot be generated
     """
+    if not case_key:
+        logger.warning("No case key provided, cannot generate case name.")
+        return None
     try:
-        text = opinion_text_from_court_opinion(case_data, 1)  # Get just the first page for case name generation
+        text = opinion_text_from_court_opinion(case_key, 1)  # Get just the first page for case name generation
         if not text:
-            logger.warning("No opinion text found for case %s, skipping case name correction.", case_data.id)
+            logger.warning("No opinion text found for case %s, skipping case name correction.", case_key)
             return None
         result = await get_case_name_agent().run(user_prompt=case_name_user_prompt.format(opinion_text=text))
         corrected_name = result.output.case_name.strip()
-        logger.info("Corrected case name from '%s' to '%s'", case_data.case_name, corrected_name)
+        logger.info("Corrected case name for case %s to '%s'", case_key, corrected_name)
         return corrected_name
     except Exception as e:
-        logger.error("Error correcting case name '%s': %s", case_data.case_name, e)
+        logger.error("Error correcting case name for case %s: %s", case_key, e)
         return None
-    
+
 async def correct_case_name_for_opinions():
-    opinions, _ = court_opinion_repo.select_many(
-        {"case_name_corrected": False})
+    """
+    Corrects the case names for all opinions that have not been corrected yet.
+
+    This function iterates through all opinions that have not had their case names corrected, retrieves the opinion text, generates a corrected case name using AI, and updates the database record with the corrected name.
+    :return: None
+    """
+    opinions, count = court_opinion_repo.select_many(
+        {"case_name_corrected": False}
+    )
+    logger.info("Found %d court opinions needing case name correction", count or 0)
     for opinion in opinions:
-        corrected_name = await make_case_name(opinion)
+        corrected_name = await make_case_name(opinion.case_key)
         if corrected_name:
+            # Update the case name in both the court opinion and the tracked opinion if it exists
+            tracked_opinion = opinion_tracking_repo.select_one(condition={"case_key": opinion.case_key})
+            if tracked_opinion:
+                tracked_opinion.case_name = corrected_name
+                opinion_tracking_repo.update(tracked_opinion.id, tracked_opinion.model_dump(mode="json"))
             opinion.case_name = corrected_name
             opinion.case_name_corrected = True
             court_opinion_repo.update(opinion.id, opinion.model_dump(mode="json"))
+    logger.info("Completed case name correction for court opinions.")
+
+    # Now fix unmigrated tracked opinions that don't have a case name but have a case key
+    tracked_opinions, tracked_count = opinion_tracking_repo.select_many(
+        {"case_name": None}
+    )
+    logger.info("Found %d tracked opinions needing case name correction", tracked_count or 0)
+    for tracked_opinion in tracked_opinions:
+        corrected_name = await make_case_name(tracked_opinion.case_key)
+        if corrected_name:
+            tracked_opinion.case_name = corrected_name
+            opinion_tracking_repo.update(tracked_opinion.id, tracked_opinion.model_dump(mode="json"))
+    logger.info("Completed case name correction for tracked opinions.")
 
 async def download_opinion_pdf(opinion: OpinionTrackingInDB) -> Union[str, None]:
     """
@@ -126,31 +109,48 @@ async def download_opinion_pdf(opinion: OpinionTrackingInDB) -> Union[str, None]
         logger.error("Error downloading PDF for case %s: %s", opinion.case_number, e)
         return None
 
-async def correct_q_and_a_for_opinions():
-    """
-    Corrects the Q&A for opinions that do not have it.
-
-    This function iterates through all opinions that do not have a Q&A generated yet,
-    retrieves the opinion text, and generates the Q&A using AI.
-
-    :return: None
-    """
-    opinions, _ = opinion_repo.select_many(
-        {"q_and_a": None})
-    for opinion in opinions:
-        text = opinion_text(opinion)
+async def _process_single_q_and_a(opinion: OpinionTrackingInDB, semaphore: asyncio.Semaphore):
+    """Process Q&A generation for a single opinion, respecting concurrency limit."""
+    async with semaphore:
+        logger.info("Generating Q&A for case %s: %s", opinion.case_number, opinion.case_name)
+        text = opinion_text(opinion, page_limit=15)
         if not text:
             logger.info("No opinion text found for case %s, attempting to download PDF.", opinion.id)
             local_path = await download_opinion_pdf(opinion)
             if local_path:
-                text = get_pdf_text(local_path)
+                text = get_pdf_text(local_path, page_limit=15)
         if not text:
             logger.warning("No opinion text available for case %s, skipping Q&A generation.", opinion.id)
-            continue
-        q_and_a = await generate_q_and_a(opinion, text)
+            return
+        try:
+            q_and_a = await generate_q_and_a(opinion, text)
+        except Exception as e:
+            logger.error("Error generating Q&A for case %s: %s. Skipping.", opinion.case_number, e)
+            return
         if q_and_a:
+            logger.info("Generated Q&A for case %s, updating database record.", opinion.case_number)
             opinion.q_and_a = q_and_a
-            opinion_repo.update(opinion.id, opinion.model_dump(mode="json"))
+            try:
+                opinion_tracking_repo.update(opinion.id, opinion.model_dump(mode="json"))
+            except Exception as e:
+                logger.error("Error updating DB for case %s: %s. Skipping.", opinion.case_number, e)
+
+async def correct_q_and_a_for_opinions(max_concurrent: int = settings.max_concurrent_llm_calls):
+    """
+    Corrects the Q&A for opinions that do not have it.
+
+    Processes up to max_concurrent opinions in parallel using asyncio.gather().
+
+    :param max_concurrent: Maximum number of concurrent Gemini API calls (default is set in .env or settings)
+    :return: None
+    """
+    opinions, count = opinion_tracking_repo.select_many(
+        {"q_and_a": None})
+    logger.info("Found %d opinions needing Q&A generation", count or len(opinions) or 0)
+    semaphore = asyncio.Semaphore(max_concurrent)
+    tasks = [_process_single_q_and_a(opinion, semaphore) for opinion in opinions]
+    await asyncio.gather(*tasks)
+    logger.info("Completed Q&A generation for opinions.")
 
 async def migrate_q_and_a_for_opinions():
     """
@@ -161,16 +161,18 @@ async def migrate_q_and_a_for_opinions():
 
     :return: None
     """
-    opinions, _ = court_opinion_repo.select_many(
-        {"q_and_a": None, "case_key": {"$ne": None}})
+    filter_condition: dict[str, Union[None, dict[str, None]]] = {"q_and_a": None}
+    opinions, count = court_opinion_repo.select_many(filter_condition)
+    logger.info("Found %d court opinions needing Q&A migration", count or len(opinions) or 0)
     for opinion in opinions:
-        tracked_opinion = opinion_repo.select_one(condition={"case_key": opinion.case_key})
+        tracked_opinion = opinion_tracking_repo.select_one(condition={"case_key": opinion.case_key})
         if not tracked_opinion:
             logger.warning("No tracked opinion found for case key %s, skipping Q&A migration for opinion %s.", opinion.case_key, opinion.id)
             continue
         if tracked_opinion.q_and_a:
             opinion.q_and_a = tracked_opinion.q_and_a
             court_opinion_repo.update(opinion.id, opinion.model_dump(mode="json"))
+    logger.info("Completed Q&A migration for court opinions.")
 
 async def generate_q_and_a(case_data: OpinionTrackingInDB, opinion_text: str) -> List[QandA]:
     """
@@ -235,66 +237,79 @@ async def generate_blog_post(case_data: OpinionTrackingInDB, opinion_text: str) 
         return None
     return result.output
 
-async def generate_blog_posts():
+async def _process_single_blog_post(row: OpinionTrackingInDB, semaphore: asyncio.Semaphore) -> bool:
+    """Process blog post and Q&A generation for a single opinion, respecting concurrency limit."""
+    async with semaphore:
+        _text = opinion_text(row, page_limit=15)
+        if not _text:
+            logger.warning("Skipping case %s due to missing opinion text.", row.case_number)
+            return False
+
+        logger.info("Generating blog post for case %s", row.case_number)
+        try:
+            post_body = await generate_blog_post(row, _text)
+        except Exception as e:
+            logger.error("Error generating blog post for case %s: %s. Skipping.", row.case_number, e)
+            return False
+        if not post_body:
+            logger.warning("Skipping case %s due to failure in blog post generation.", row.case_number)
+            return False
+
+        logger.info("Generating Q&A for case %s", row.case_number)
+        try:
+            q_and_a = await generate_q_and_a(row, _text)
+        except Exception as e:
+            logger.error("Error generating Q&A for case %s: %s. Continuing without Q&A.", row.case_number, e)
+            q_and_a = []
+
+        row.body = post_body
+        row.q_and_a = q_and_a  # Pydantic will serialize automatically
+
+        filename = f"draft_{row.case_number}.json"
+        full_path = os.path.join(POSTS_LOCAL_PATH, filename)
+        logger.info("Saving draft post to %s", full_path)
+        with open(full_path, 'w') as f:
+            draft = row.model_dump(mode="json")
+            draft["opinion_text"] = _text  # Include the opinion text in the saved draft for reference
+            f.write(json.dumps(draft))
+
+        try:
+            opinion_tracking_repo.update(row.id, row.model_dump(mode="json"))
+            logger.info("Updated database record for case %s", row.case_number)
+        except Exception as e:
+            logger.error("Error updating DB for case %s: %s. Skipping.", row.case_number, e)
+            return False
+
+        return True
+
+async def generate_blog_posts(max_concurrent: int = settings.max_concurrent_llm_calls):
     """
     Generates blog posts for all opinions that are pending blog generation.
 
-    This function retrieves all opinions that are marked as pending blog generation, extracts the opinion text, generates a blog post using AI, and saves the generated post to local storage. It also updates the database record for each opinion with the generated blog post content.
+    Processes up to max_concurrent opinions in parallel using asyncio.gather().
+
+    :param max_concurrent: Maximum number of concurrent Gemini API calls (default is set in .env or settings)
     :return: A tuple containing the path where posts are saved and the count of generated posts
     :rtype: Tuple[str, int]
     """
-    post_count = 0
-
     try:
-        records, _ = opinion_repo.select_many(condition={"status": "pending-blog"})  # type: ignore
+        records, _ = opinion_tracking_repo.select_many(condition={"status": "pending-blog"})  # type: ignore
         records: List[OpinionTrackingInDB]
-        for row in records:
-            _text = opinion_text(row)
-            if not _text:
-                logger.warning("Skipping case %s due to missing opinion text.", row.case_number)
-                continue
-
-            logger.info("Generating blog post for case %s", row.case_number)
-            post_body = await generate_blog_post(row, _text)
-            if not post_body:
-                logger.warning("Skipping case %s due to failure in blog post generation.", row.case_number)
-                continue
-
-            logger.info("Generating Q&A for case %s", row.case_number)
-            q_and_a = await generate_q_and_a(row, _text)
-            if post_body:
-                row.body = post_body
-                row.q_and_a = q_and_a  # Pydantic will serialize automatically
-                post_count += 1
-
-                filename = f"draft_{row.case_number}.json"
-                full_path = os.path.join(POSTS_LOCAL_PATH, filename)
-                logger.info("Saving draft post to %s", full_path)
-                with open(full_path, 'w') as f:
-                    draft = row.model_dump(mode="json")
-                    draft["opinion_text"] = _text  # Include the opinion text in the saved draft for reference
-                    f.write(json.dumps(draft))
-
-                logger.info("Updated database record for case %s", row.case_number)
-                opinion_repo.update(row.id, row.model_dump(mode="json"))
-
+        logger.info("Found %d opinions pending blog generation", len(records))
+        semaphore = asyncio.Semaphore(max_concurrent)
+        results = await asyncio.gather(*[_process_single_blog_post(row, semaphore) for row in records])
+        post_count = sum(1 for r in results if r)
         return POSTS_LOCAL_PATH, post_count
     except Exception as e:
         logger.error("Error generating blog posts: %s", e)
         logger.exception(e)
-        return POSTS_LOCAL_PATH, post_count
+        return POSTS_LOCAL_PATH, 0
 
 async def run_blogger_bot():
     # Generate the blog posts
     logger.info("Generating draft blog posts")
     saved_as, count = await generate_blog_posts()
     logger.info("Drafted %d blog posts, saved to %s", count, saved_as)
-    # logger.info("Correcting case names for opinions")
-    # await correct_case_name_for_opinions()
-    # logger.info("Generating Q&A for opinions")
-    # await correct_q_and_a_for_opinions()
-    # logger.info("Migrating Q&A for opinions")
-    # await migrate_q_and_a_for_opinions()
 
 if __name__ == "__main__":
     logger.info("Starting blogger bot")

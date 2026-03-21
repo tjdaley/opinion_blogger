@@ -14,12 +14,22 @@ class CaseAnalysis(BaseModel):
     seo_focuskw: str
     meta_description: str
 
-# Initialize the Agent with Gemini (no_safety=True for legal content)
-case_analysis_agent: Agent[None, CaseAnalysis] = Agent(
-    model=configure_model(mode="chat", no_safety=True),
-    output_type=CaseAnalysis,
-    system_prompt=get_prompt("case_analysis_agent_system_prompt"),
-    name="CaseAnalysisAgent",
-)
+# Lazy singleton pattern to avoid event loop issues
+_case_analysis_agent: Agent[None, CaseAnalysis] | None = None
+
+def get_case_analysis_agent() -> Agent[None, CaseAnalysis]:
+    """
+    Get or create the case analysis agent instance.
+    Uses lazy initialization to ensure it's created within an async context.
+    """
+    global _case_analysis_agent
+    if _case_analysis_agent is None:
+        _case_analysis_agent = Agent(
+            model=configure_model(mode="chat", no_safety=True),
+            output_type=CaseAnalysis,
+            system_prompt=get_prompt("case_analysis_agent_system_prompt"),
+            name="CaseAnalysisAgent",
+        )
+    return _case_analysis_agent
 
 user_prompt = get_prompt("case_analysis_agent_user_prompt_template", raise_error=True)

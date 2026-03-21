@@ -58,7 +58,7 @@ def get_llm_param(vendor: str, param_name: str, mode: str) -> str:
 
     raise ValueError(f"Unsupported property: {param_name}")
 
-def configure_model(mode: str = "chat", override_vendor: Optional[str] = None, override_model: Optional[str] = None, no_safety: bool = False) -> Model:
+def configure_model(mode: str = "chat", override_vendor: Optional[str] = None, override_model: Optional[str] = None, no_safety: bool = True) -> Model:
     """
     Configure and return the appropriate LLM model based on settings.
     Rf: https://ai.pydantic.dev/models/overview/
@@ -71,7 +71,7 @@ def configure_model(mode: str = "chat", override_vendor: Optional[str] = None, o
     :type override_vendor: Optional[str]
     :param override_model: Optional model name to override the default from settings.
     :type override_model: Optional[str]
-    :param no_safety: If True, disable safety settings (if applicable). Default is False.
+    :param no_safety: If True, disable safety settings (if applicable). Default is True.
     :type no_safety: bool
 
     :return: Configured LLM model

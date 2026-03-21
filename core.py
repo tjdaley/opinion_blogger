@@ -7,10 +7,9 @@ from requests.adapters import HTTPAdapter
 from util.settings import settings
 
 from db.models.opinion_tracking import OpinionTrackingInDB
-from db.repositories.opinion_tracking import OpinionTrackingRepository
-from db.supabasemanager import SupabaseManager
-from agents.family_angle_agent import family_angle_agent, user_prompt as family_angle_user_prompt, FamilyAngle
-from agents.case_analysis_agent import case_analysis_agent, user_prompt as case_analysis_user_prompt, CaseAnalysis
+from db.connection import opinion_tracking_repo
+from agents.family_angle_agent import get_family_angle_agent, user_prompt as family_angle_user_prompt, FamilyAngle
+from agents.case_analysis_agent import get_case_analysis_agent, user_prompt as case_analysis_user_prompt, CaseAnalysis
 from util.loggerfactory import LoggerFactory
 
 logger = LoggerFactory.create_logger(__name__)
@@ -21,14 +20,27 @@ POSTS_LOCAL_PATH = settings.posts_local_path
 SCOTX_URL = settings.scotx_url
 MAX_OPINION_SIZE = settings.max_opinion_size
 
-# --- DB CONNECTION ---
-manager = SupabaseManager()
-opinion_repo = OpinionTrackingRepository(manager)
+# --- BROWSER HEADERS ---
+# Shared Chrome 143 headers to bypass bot detection (e.g. Azure Application Gateway)
+BROWSER_HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Accept-Encoding': 'gzip, deflate, br, zstd',
+    'DNT': '1',
+    'Sec-CH-UA': '"Google Chrome";v="143", "Chromium";v="143", "Not A(Brand";v="24"',
+    'Sec-CH-UA-Mobile': '?0',
+    'Sec-CH-UA-Platform': '"Windows"',
+    'Sec-Fetch-Dest': 'document',
+    'Sec-Fetch-Mode': 'navigate',
+    'Sec-Fetch-Site': 'none',
+    'Sec-Fetch-User': '?1',
+}
 
 # --- SESSION SETUP ---
 def get_robust_session() -> requests.Session:
     session = requests.Session()
-    # Retry strategy: 
+    # Retry strategy:
     # total=5 (try 5 times), backoff_factor=1 (wait 1s, 2s, 4s, 8s...)
     # status_forcelist (retry on these specific server errors)
     retry_strategy = Retry(
@@ -45,12 +57,19 @@ def get_robust_session() -> requests.Session:
 # Initialize global session
 http = get_robust_session()
 
-def get_pdf_text(filepath: str) -> str:
+def ensure_directories():
+    """Creates output directories if they don't exist."""
+    for path in [OPINION_LOCAL_PATH, POSTS_LOCAL_PATH]:
+        if not os.path.exists(path):
+            os.makedirs(path)
+
+def get_pdf_text(filepath: str, page_limit: int = 5) -> str:
     """
     Extracts the first MAX_OPINION_SIZE characters from the PDF for AI analysis.
 
     Arguments:
         filepath -- path to the PDF file
+        page_limit -- maximum number of pages to read (default 5 for scraping, use 15 for blog generation)
 
     Returns:
         Extracted text from the PDF
@@ -58,8 +77,7 @@ def get_pdf_text(filepath: str) -> str:
     text = ""
     try:
         with fitz.open(filepath) as doc:
-            # We usually only need the first few pages for the summary/holding
-            for page in doc[:5]: 
+            for page in doc[:page_limit]:
                 text += page.get_text()  # type: ignore
     except Exception as e:
         logger.error("Error reading PDF %s: %s", filepath, e)
@@ -68,7 +86,7 @@ def get_pdf_text(filepath: str) -> str:
 async def analyze_with_full_text(case_name: str, full_text: str) -> CaseAnalysis:
     """
     Uses the actual opinion text to extract professional legal data.
-    
+
     Arguments:
         case_name -- Name of the case
         full_text -- Full text of the court opinion
@@ -77,30 +95,31 @@ async def analyze_with_full_text(case_name: str, full_text: str) -> CaseAnalysis
         Instance of CaseAnalysis
     """
     prompt = case_analysis_user_prompt.format(case_name=case_name, opinion_text=full_text)
-    result = await case_analysis_agent.run(user_prompt=prompt)
+    result = await get_case_analysis_agent().run(user_prompt=prompt)
     return result.output
 
-def opinion_text(row: OpinionTrackingInDB) -> str:
+def opinion_text(row: OpinionTrackingInDB, page_limit: int = 5) -> str:
     """
     Retrieves the opinion text for a given case row.
     Arguments:
         row -- An instance of OpinionTrackingInDB representing a case
+        page_limit -- maximum number of pages to read (default 5 for scraping, use 15 for blog generation)
     Returns:
         Extracted opinion text
     """
     pdf_path = os.path.join(OPINION_LOCAL_PATH, f"{row.case_number}.pdf")
-    _text = get_pdf_text(pdf_path) if os.path.exists(pdf_path) else ""
+    _text = get_pdf_text(pdf_path, page_limit=page_limit) if os.path.exists(pdf_path) else ""
     return _text
 
 async def review_non_family_cases():
     """
     Reviews 'pending-review' cases (including Criminal) for Family Law relevance.
     """
-    records, _ = opinion_repo.select_many(
+    records, _ = opinion_tracking_repo.select_many(
         condition={"status": "pending-review", 'is_family_law': False}
     )
     records: List[OpinionTrackingInDB]
-    
+
     for row in records:
         case_name = row.headline
         opinion_txt = opinion_text(row)
@@ -111,7 +130,7 @@ async def review_non_family_cases():
                 case_name=case_name,
                 opinion_text=opinion_txt
             )
-            result = await family_angle_agent.run(user_prompt=prompt)
+            result = await get_family_angle_agent().run(user_prompt=prompt)
 
             review: FamilyAngle = result.output
 
@@ -129,8 +148,8 @@ async def review_non_family_cases():
             logger.error("Error analyzing case %s: %s. Marking for manual review.", row.case_number, e)
             row.status = "pending-review"  # Keep in pending-review for manual review
             continue
-            
-        opinion_repo.update(row.id, row.model_dump(mode="json"))
+
+        opinion_tracking_repo.update(row.id, row.model_dump(mode="json"))
 
 def download_pdf(url: str, case_number: str) -> str | None:
     """
@@ -145,20 +164,7 @@ def download_pdf(url: str, case_number: str) -> str | None:
     filename = f"{case_number}.pdf"
     full_path = os.path.join(OPINION_LOCAL_PATH, filename)
 
-    # Browser headers to avoid 403 blocks
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36',
-        'Accept': 'application/pdf,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Accept-Encoding': 'gzip, deflate, br, zstd',
-        'DNT': '1',
-        'Sec-CH-UA': '"Google Chrome";v="143", "Chromium";v="143", "Not A(Brand";v="24"',
-        'Sec-CH-UA-Mobile': '?0',
-        'Sec-CH-UA-Platform': '"Windows"',
-        'Sec-Fetch-Dest': 'document',
-        'Sec-Fetch-Mode': 'navigate',
-        'Sec-Fetch-Site': 'same-origin'
-    }
+    headers = {**BROWSER_HEADERS, 'Accept': 'application/pdf,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8', 'Sec-Fetch-Site': 'same-origin'}
 
     response = http.get(url, headers=headers, timeout=15)
     if response.status_code == 200:

@@ -16,6 +16,10 @@ This is either a Civil or Criminal case. Evaluate if it contains a ruling highly
    - Fifth Amendment invocations in civil depositions following criminal charges.
    - Mandamus relief regarding temporary orders or jurisdictional disputes (UCCJEA).
 
+**HOWEVER**: Answer NO for per curiam memorandum opinions that merely dismiss a mandamus or an appeal for failure to file a brief,
+reporter's record, or clerk's record. The law on these dismissals is well-known and adding those opinions
+is of no value to our library.
+
 Does this case contain a ruling that would be highly relevant to a Family Law litigator?
 
 <case>

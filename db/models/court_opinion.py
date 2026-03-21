@@ -8,7 +8,8 @@ class CourtOpinion(BaseModel):
     citation: str
     opinion_link: str
     court: str
-    date: str
+    lower_court_name: Optional[str] = None
+    date: datetime.date
     summary: str
     litigation_takeaway: str
     slug: str

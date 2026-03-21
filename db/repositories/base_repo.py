@@ -1,6 +1,6 @@
 from typing import TypeVar, Generic, List, Type, Any, Optional
 from pydantic import BaseModel
-from db.supabasemanager import DatabaseManager
+from db.databasemanager import DatabaseManager
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -18,7 +18,10 @@ class BaseRepository(Generic[T]):
     
     def insert(self, data: dict[str, Any]) -> T:
         return self.manager.insert(self.table_name, data, self.model_class)
-    
+
+    def upsert(self, data: dict[str, Any], on_conflict: str) -> T:
+        return self.manager.upsert(self.table_name, data, self.model_class, on_conflict)
+
     def update(self, record_id: Any, data: dict[str, Any]) -> T:
         return self.manager.update(self.table_name, record_id, data, self.model_class)
     

@@ -43,12 +43,12 @@
        4.2 ISSUES
            (a) Fixed Header Text: "Issues Decided"
            (b) Content: List the issues that the court decided
-           (c) Content Style: Paragraph
+           (c) Content Style: Paragraph - However, if you have a list, whether ordered or unordered, use correct markdown syntax for the list
            (d) Header Style: H3
        4.3 RULES
            (a) Fixed Header Text: "Rules Applied"
            (b) Content: Discuss the statutes and legal precedents that the court applied
-           (c) Content Style: Paragraph
+           (c) Content Style: Paragraph - However, if you have a list, whether ordered or unordered, use correct markdown syntax for the list
            (d) Header Style: H3
        4.4 APPLICATION
            (a) Fixed Header Text: "Application"
@@ -63,16 +63,17 @@
     5. PRACTICAL TIPS
        (a) Fixed Header Text: "Practical Application"
        (b) Content: Discuss how this case applies to various family law litigation scenarios.
-       (c) Content Style: Paragraph
+       (c) Content Style: Paragraph - However, if you have a list, whether ordered or unordered, use correct markdown syntax for the list
        (d) Header Style: H2
     6. CHECKLIST
        (a) Fixed Header Text: "Checklists"
        (b) Content: Generate checklists, by subtopic, that practitioners can use to apply the holding of the case and how to avoid the downside of what happened to the non-prevailing party.
-       (c) Content Style: Paragraph for the check list name, e.g. "Gather Your Evidence"; and bulleted list for items under that list.
+       (c) Content Style: h3 for the check list name, e.g. "Gather Your Evidence"; and bulleted list for items under that list.
        (d) Header Style: h2
        (e) Sub-lists Header Text: Generate a meaningful checklist name
        (f) Sub-lists Header Style: h3
        (g) Sub-lists Items: In the bulleted lists, use Markdown bullets with proper line terminators so they translate to HTML correctly
+       (h) Rule: Do NOT create duplicate "Checklists" headers
     7. CITATION
        (a) Fixed Header Text: "Citation"
        (b) Content: Provide the full formal citation (e.g., *In re Marshall*, __ S.W.3d __).
@@ -87,7 +88,7 @@
     
     TONE: Professional, authoritative, and strategic. Avoid layman's terms; speak to peers, in a professional conversational tone and narrative style.
     
-    FORMAT: Use Markdown to format the headers, tables, numbered lists, links, and bulleted lists
+    FORMAT: Use Markdown to format the headers, tables, numbered lists, links, and bulleted lists. Make sure the "new lines" that you insert after headers and bullets are proper Markdown syntax so that the headers and bullets are not treated as a single typographical unit.
     
     EXCLUDE: You are generating a blog post. Do not include any other preamble at the top and do not include an offer to do addtional work at the bottem.
  

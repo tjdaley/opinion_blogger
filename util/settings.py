@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     coatx_media_id: int = 771
 
     # For Copying from Blog to Landing Page
+    wp_coatx_tag: str = 'COATX'
     wp_post_tag: str = "ok_to_publish"
     wp_error_tag: str = "publication_failed"
     wp_success_tag: str = "published_to_landing_pages"
@@ -43,16 +44,22 @@ class Settings(BaseSettings):
     coa_lookback_days: int = 10
 
     # Logging settings
-    log_format: str = "%(asctime)s - %(name)-15s - %(levelname)-8s - %(message)s"
+    log_format: str = "{asctime} | {levelname:<8s} | {name:<25s} | {message}"
     log_level: str = "WARNING"  # Default log level for API
 
+    # For handling multiple LLM calls at one time
+    max_concurrent_llm_calls: int = 5
+
     # AI Settings
-    llm_vendor: str = "gemini"  # Options: 'gemini', 'openai', 'anthropic', 'groq'
-    llm_fast_vendor: str = "gemini"  # Vendor for fast models
+    llm_vendor: str = "openai"  # Options: 'gemini', 'openai', 'anthropic', 'groq'
+    llm_fast_vendor: str = "openai"  # Vendor for fast models
+    llm_embedding_vendor: str = "openai"  # Vendor for embedding models
+    llm_canonical_question_vendor: str = "anthropic"  # Vendor for canonical question generation
     llm_chat_temperature: float = 0.1
     llm_chat_top_p: float = 0.1
     llm_strategy_temperature: float = 0.7
     llm_strategy_top_p: float = 0.8
+    llm_embedding_batch_size: int = 100
 
     # LLM settings
     gemini_api_key: str = ""
@@ -61,14 +68,17 @@ class Settings(BaseSettings):
     gemini_model_prefix: str = "google-gla"
     gemini_chat_temperature: float = 1.0
     gemini_chat_top_p: float = 0.95
+    gemini_embedding_model: str = "gemini-embedding-001"
 
     openai_api_key: str = ""
     openai_model: str = ""
     openai_fast_model: str = "gpt-5-nano"
+    openai_embedding_model: str = "text-embedding-3-small"
 
     anthropic_api_key: str = ""
     anthropic_model: str = ""
     anthropic_fast_model: str = "claude-haiku-4-5"
+    anthropic_canonical_question_model: str = "claude-sonnet-4-20250514"
 
     groq_api_key: str = ""
     groq_model: str = "groq/compound"

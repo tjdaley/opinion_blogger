@@ -1,0 +1,8 @@
+Below are semantically similar questions extracted from different court opinion analyses. Generate:
+
+1. A single **canonical question** that captures the common inquiry. Write it the way a real person would type it into Google — natural, concise, and SEO-friendly. Do NOT use legalese unless the legal term IS the search term (e.g., "community property" is fine, "presumptive guideline support obligation" is not).
+
+2. A short **subject label** (2-4 words) for grouping on the FAQ page. Examples: "Child Support", "Property Division", "Custody Modification", "Enforcement", "Appeals Process".
+
+Questions:
+{questions_block}

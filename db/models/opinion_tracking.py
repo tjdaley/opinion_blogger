@@ -28,6 +28,7 @@ class OpinionTracking(BaseModel):
     case_key: Optional[str] = None
     body: Optional[str] = None
     q_and_a: Optional[List[QandA]] = None
+    opinion_text: Optional[str] = None
 
 class OpinionTrackingInDB(OpinionTracking):
     id: int

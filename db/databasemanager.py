@@ -13,6 +13,18 @@ logging.getLogger("postgrest").setLevel(logging.getLevelNamesMapping().get(setti
 
 T = TypeVar("T", bound=BaseModel)
 
+
+class NotNull:
+    """Sentinel value for 'IS NOT NULL' conditions in queries."""
+    def __repr__(self) -> str:
+        return "NOT_NULL"
+
+NOT_NULL = NotNull()
+"""Use as a condition value to filter for non-null fields.
+Example: select_many("table", Model, {"field": NOT_NULL})
+"""
+
+
 class DatabaseManager(ABC):
     @abstractmethod
     def select_one(self, table:str, result_type: Type[T], condition: dict[str, Any]) -> Optional[T]:
@@ -24,6 +36,10 @@ class DatabaseManager(ABC):
 
     @abstractmethod
     def insert(self, table:str, data: dict[str, Any], result_type: Type[T]) -> T:
+        pass
+
+    @abstractmethod
+    def upsert(self, table: str, data: dict[str, Any], result_type: Type[T], on_conflict: str) -> T:
         pass
 
     @abstractmethod

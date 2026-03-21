@@ -8,7 +8,7 @@ from postgrest.base_request_builder import APIResponse
 from postgrest.types import CountMethod
 from postgrest.exceptions import APIError
 
-from db.databasemanager import DatabaseManager
+from db.databasemanager import DatabaseManager, NotNull
 from util.settings import settings
 from util.loggerfactory import LoggerFactory
 
@@ -52,7 +52,9 @@ class SupabaseManager(DatabaseManager):
 
         query = self.client.table(table).select("*")
         for field, value in condition.items():
-            if value is None:
+            if isinstance(value, NotNull):
+                query = query.not_.is_(field, "null")
+            elif value is None:
                 query = query.is_(field, None)
             else:
                 query = query.eq(field, value)
@@ -113,10 +115,12 @@ class SupabaseManager(DatabaseManager):
         :rtype: tuple[list[BaseModel], int]
         """
 
-        query = self.client.table(table).select("*")
+        query = self.client.table(table).select("*", count=CountMethod.exact)
 
         for field, value in condition.items():
-            if value is None:
+            if isinstance(value, NotNull) or (isinstance(value, str) and value.lower() == "not null"):
+                query = query.not_.is_(field, "null")
+            elif value is None:
                 query = query.is_(field, None)
             else:
                 query = query.eq(field, value)
@@ -126,6 +130,8 @@ class SupabaseManager(DatabaseManager):
             query = query.range(start, end)
 
         result = query.execute()
+        if not result.data:
+            return [], 0
         return [result_type(**item) for item in result.data], result.count  # type: ignore
 
     @retry(
@@ -178,6 +184,26 @@ class SupabaseManager(DatabaseManager):
             LOGGER.exception(e)
             raise
     
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception_type(APIError)
+    )
+    def upsert(self, table: str, data: Any, result_type: Type[T], on_conflict: str) -> T:
+        """
+        Insert or update a record based on a conflict column.
+
+        :param table: Name of the target table.
+        :param data: Dictionary containing the data to upsert.
+        :param result_type: Subclass of BaseModel to parse the result into.
+        :param on_conflict: Comma-separated column name(s) that define the uniqueness constraint.
+        :return: Parsed instance of the upserted record.
+        """
+        result = self.client.table(table).upsert(data, on_conflict=on_conflict).execute()
+        if not result.data:
+            raise ValueError(f"Upsert operation failed for table {table} with data: {data}")
+        return result_type(**result.data[0])  # type: ignore
+
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=2, max=10),

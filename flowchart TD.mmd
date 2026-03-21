@@ -1,0 +1,141 @@
+flowchart TD
+    Start([python cluster_questions.py]) --> CLI{CLI Command?}
+
+    %% ═══════════════════════════════════════════════════
+    %% CLUSTER COMMAND
+    %% ═══════════════════════════════════════════════════
+    CLI -->|cluster| Incremental{--incremental?}
+
+    Incremental -->|Yes| FetchMapped["get_all_mapped_keys()
+    ┌──────────────────────────┐
+    │ opinion_question_mapping │
+    │ repo: paginate all rows  │
+    └──────────────────────────┘"]
+    FetchMapped --> FetchAll
+
+    Incremental -->|No| FetchAll
+
+    FetchAll["fetch_questions()
+    ┌──────────────────────────────┐
+    │ court_opinion_repo           │
+    │   .get_opinions_with_qa()    │
+    │ WHERE q_and_a IS NOT NULL    │
+    │ Flatten → ExtractedQuestion  │
+    └──────────────────────────────┘"]
+
+    FetchMapped --> FilterUnmapped["Filter out already-mapped
+    questions by (opinion_id, idx)"]
+    FilterUnmapped --> QCheck
+
+    FetchAll --> QCheck{Questions found?}
+    QCheck -->|No| NoQ([No questions — exit])
+    QCheck -->|Yes| Embed
+
+    Embed["embed_questions()
+    ┌──────────────────────────────┐
+    │ OpenAI Embeddings API        │
+    │ Batch size: EMBEDDING_BATCH  │
+    │ → numpy array (N, dim)       │
+    └──────────────────────────────┘"]
+
+    Embed --> Preview{--preview-distances?}
+    Preview -->|Yes| DistTable["preview_distances()
+    ┌────────────────────────────┐
+    │ Cosine distance matrix     │
+    │ Print percentile table     │
+    │ (helps tune threshold)     │
+    └────────────────────────────┘"]
+    DistTable --> Done([Exit])
+
+    Preview -->|No| Cluster
+
+    Cluster["cluster_questions()
+    ┌─────────────────────────────────┐
+    │ Cosine distance matrix          │
+    │ AgglomerativeClustering         │
+    │   metric=precomputed            │
+    │   linkage=average               │
+    │   threshold (default 0.20)      │
+    │ → cluster labels per question   │
+    └─────────────────────────────────┘"]
+
+    Cluster --> Build
+
+    Build["build_review_output()
+    ┌─────────────────────────────────┐
+    │ For each cluster:               │
+    │                                 │
+    │  ┌─ generate_canonical_question │
+    │  │  CanonicalQuestionAgent      │
+    │  │  (PydanticAI + Anthropic)    │
+    │  │  → CanonicalQuestion model   │
+    │  └──────────────────────────────│
+    │                                 │
+    │  Build ClusterReviewEntry with  │
+    │  ClusterMember list             │
+    │  Skip if < min_cluster_size     │
+    └─────────────────────────────────┘"]
+
+    Build --> Save["save_review_file()
+    ┌──────────────────────────┐
+    │ Serialize via model_dump │
+    │ Write cluster_review.json│
+    └──────────────────────────┘"]
+
+    Save --> Summary["Print summary table
+    (top 20 multi-question clusters)"]
+    Summary --> Done2([Exit])
+
+    %% ═══════════════════════════════════════════════════
+    %% COMMIT COMMAND
+    %% ═══════════════════════════════════════════════════
+    CLI -->|commit --file| LoadJSON["Load reviewed JSON
+    Parse → ClusterReviewEntry models"]
+
+    LoadJSON --> FilterApproved{Any entries with
+    needs_review = false?}
+    FilterApproved -->|No| NoApproved([No approved clusters — exit])
+    FilterApproved -->|Yes| CommitLoop
+
+    CommitLoop["For each approved cluster:"]
+    CommitLoop --> Step1
+
+    Step1["1. Get or create subject
+    ┌────────────────────────────────────┐
+    │ canonical_question_subject_repo    │
+    │   .get_or_create_by_name()        │
+    │ → CanonicalQuestionSubjectInDB    │
+    └────────────────────────────────────┘"]
+
+    Step1 --> Step2["2. Upsert canonical question
+    ┌────────────────────────────────────┐
+    │ canonical_question_repo            │
+    │   .upsert_by_slug()               │
+    │ on_conflict: slug                  │
+    │ → CanonicalQuestionRecordInDB     │
+    └────────────────────────────────────┘"]
+
+    Step2 --> Step3["3. Upsert mappings (per member)
+    ┌────────────────────────────────────┐
+    │ opinion_question_mapping_repo      │
+    │   .upsert_mapping()               │
+    │ on_conflict: opinion_id + q_index  │
+    │ → OpinionQuestionMappingInDB      │
+    └────────────────────────────────────┘"]
+
+    Step3 --> MoreClusters{More clusters?}
+    MoreClusters -->|Yes| CommitLoop
+    MoreClusters -->|No| CommitDone([Done — clusters committed])
+
+    %% ═══════════════════════════════════════════════════
+    %% STYLING
+    %% ═══════════════════════════════════════════════════
+    classDef db fill:#e8f4f8,stroke:#2196F3,stroke-width:2px
+    classDef llm fill:#fff3e0,stroke:#FF9800,stroke-width:2px
+    classDef io fill:#e8f5e9,stroke:#4CAF50,stroke-width:2px
+    classDef decision fill:#fce4ec,stroke:#E91E63,stroke-width:2px
+
+    class FetchAll,FetchMapped,Step1,Step2,Step3 db
+    class Embed,Build llm
+    class Save,LoadJSON io
+    class CLI,Incremental,Preview,QCheck,FilterApproved,MoreClusters decision
