@@ -1,6 +1,5 @@
 import asyncio
 import json
-from logging import exception
 import time
 import random
 import re
