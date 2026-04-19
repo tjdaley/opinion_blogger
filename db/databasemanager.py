@@ -27,11 +27,11 @@ Example: select_many("table", Model, {"field": NOT_NULL})
 
 class DatabaseManager(ABC):
     @abstractmethod
-    def select_one(self, table:str, result_type: Type[T], condition: dict[str, Any]) -> Optional[T]:
+    def select_one(self, table:str, result_type: Type[T], condition: dict[str, Any], selection: str="*") -> Optional[T]:
         pass
 
     @abstractmethod
-    def select_many(self, table:str, result_type: Type[T], condition: dict[str, Any], sort_by: Optional[str] = None, sort_direction: str = "asc", start: Optional[int] = None, end: Optional[int] = None) -> tuple[list[T], int]:
+    def select_many(self, table:str, result_type: Type[T], condition: dict[str, Any], sort_by: Optional[str] = None, sort_direction: str = "asc", start: Optional[int] = None, end: Optional[int] = None, selection: str="*") -> tuple[list[T], int]:
         pass
 
     @abstractmethod

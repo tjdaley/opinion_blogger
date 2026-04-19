@@ -48,9 +48,10 @@ class SupabaseManager(DatabaseManager):
         table:str,
         result_type: Type[T],
         condition: dict[str, Any],
+        selection: str="*"
         ) -> Optional[T]:
 
-        query = self.client.table(table).select("*")
+        query = self.client.table(table).select(selection)
         for field, value in condition.items():
             if isinstance(value, NotNull):
                 query = query.not_.is_(field, "null")
@@ -84,7 +85,9 @@ class SupabaseManager(DatabaseManager):
         sort_by: Optional[str] = None,
         sort_direction: str = "asc",
         start: Optional[int] = None,
-        end: Optional[int] = None
+        end: Optional[int] = None,
+        selection: str="*"
+
         ) -> tuple[list[T], int]:
         """
         Select multiple records from the specified table based on conditions.
@@ -115,7 +118,7 @@ class SupabaseManager(DatabaseManager):
         :rtype: tuple[list[BaseModel], int]
         """
 
-        query = self.client.table(table).select("*", count=CountMethod.exact)
+        query = self.client.table(table).select(selection, count=CountMethod.exact)
 
         for field, value in condition.items():
             if isinstance(value, NotNull) or (isinstance(value, str) and value.lower() == "not null"):

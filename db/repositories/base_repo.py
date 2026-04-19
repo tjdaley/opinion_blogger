@@ -13,8 +13,8 @@ class BaseRepository(Generic[T]):
     def select_one(self, condition: dict[str, Any]) -> Optional[T]:
         return self.manager.select_one(self.table_name, self.model_class, condition)
     
-    def select_many(self, condition: dict[str, Any], sort_by: Optional[str] = None, sort_direction: str = "asc", start: Optional[int] = None, end: Optional[int] = None) -> tuple[List[T], int]:
-        return self.manager.select_many(self.table_name, self.model_class, condition, sort_by, sort_direction, start, end)
+    def select_many(self, condition: dict[str, Any], sort_by: Optional[str] = None, sort_direction: str = "asc", start: Optional[int] = None, end: Optional[int] = None, selection: str = "*") -> tuple[List[T], int]:
+        return self.manager.select_many(self.table_name, self.model_class, condition, sort_by, sort_direction, start, end, selection)
     
     def insert(self, data: dict[str, Any]) -> T:
         return self.manager.insert(self.table_name, data, self.model_class)
