@@ -1,0 +1,22 @@
+# HAProxy snippet for sms.jdbot.us -> notifier_webhook service.
+#
+# Integrate into your existing haproxy.cfg. The `frontend https_in` ACL/use_backend
+# pair should go alongside your other host-based routes; the `backend` is new.
+
+# ---- in your existing https frontend ----
+#
+# acl host_sms hdr(host) -i sms.jdbot.us
+# use_backend opinion_blogger_webhook if host_sms
+#
+# Recommended (so Twilio signature validation sees the right scheme):
+#   http-request set-header X-Forwarded-Proto https if { ssl_fc }
+#
+# ---- new backend ----
+#
+# backend opinion_blogger_webhook
+#     option httpchk GET /healthz
+#     server webhook 127.0.0.1:8080 check
+
+# TLS: sms.jdbot.us needs to be included in whatever cert HAProxy terminates on :443.
+# If you're using certbot's HAProxy bundle pattern, add sms.jdbot.us to the cert's SANs
+# or issue a new cert and drop it in /etc/haproxy/certs/.

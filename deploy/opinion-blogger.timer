@@ -1,0 +1,11 @@
+[Unit]
+Description=Run opinion blogger pipeline twice daily
+
+[Timer]
+OnCalendar=*-*-* 08:00:00
+OnCalendar=*-*-* 16:00:00
+Persistent=true
+Unit=opinion-blogger.service
+
+[Install]
+WantedBy=timers.target

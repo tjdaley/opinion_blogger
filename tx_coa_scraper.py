@@ -3,7 +3,7 @@ from urllib.parse import urljoin
 from bs4 import BeautifulSoup
 from uuid import uuid4
 
-from core import download_pdf, get_pdf_text, analyze_with_full_text, http, BROWSER_HEADERS
+from core import download_pdf, get_pdf_text, http, BROWSER_HEADERS
 from db.models.opinion_tracking import OpinionTracking
 from db.connection import opinion_tracking_repo
 from util.loggerfactory import LoggerFactory
@@ -189,41 +189,35 @@ async def process_docket_page(coa_id: str, url: str, release_date: str):
                 # Cell 2: Disposition (The ruling)
                 disposition = tds[2].get_text(strip=True)
 
-                # --- DOWNLOAD & ANALYSIS ---
+                # --- DOWNLOAD ---
                 pdf_path = download_pdf(pdf_url, case_num)
                 if not pdf_path:
                     logger.error("Failed to download PDF for case %s. URL: %s", case_num, pdf_url)
                     continue
 
                 opinion_text = get_pdf_text(pdf_path)
-                analysis = await analyze_with_full_text(case_name, opinion_text)
-                logger.info("Analysis for case %s: %s", case_num, analysis)
 
-                # --- DB INSERTION ---
-                status = "pending-blog" if analysis.family_law else "pending-family-review"
+                # --- DB INSERTION (status='pending-analysis' is picked up by classify_opinions) ---
                 opinion = OpinionTracking(
                     case_number=case_num,
-                    status=status,
-                    is_family_law=analysis.family_law,
-                    headline=analysis.headline or f"{case_name} ({coa_id.upper()})",
-                    legal_issue=analysis.legal_issue or disposition,
-                    holding=analysis.holding,
+                    status="pending-analysis",
+                    is_family_law=False,
+                    headline=f"{case_name} ({coa_id.upper()})",
+                    legal_issue=disposition,
+                    holding="",
                     opinion_link=pdf_url,
                     processed_at=datetime.now(),
                     court=coa_id.upper(),
                     opinion_date=datetime.strptime(release_date, "%m/%d/%Y").date(),
-                    case_name=analysis.case_name or case_name,
-                    lower_court_name=analysis.lower_court_name or lower_court,
-                    seo_title=analysis.seo_title,
-                    seo_focus_kw=analysis.seo_focuskw,
-                    meta_description=analysis.meta_description,
+                    case_name=case_name,
+                    lower_court_name=lower_court,
                     case_key=str(uuid4()),
                     opinion_text=opinion_text
                 )
 
                 try:
                     opinion_tracking_repo.insert(opinion.model_dump(mode="json"))
-                    logger.info("Processed %s Case %s: %s", "Criminal" if "2" in suffix else "Civil", case_num, case_name)
+                    logger.info("Scraped %s Case %s: %s", "Criminal" if "2" in suffix else "Civil", case_num, case_name)
                 except Exception as e:
                     logger.error("Error inserting opinion for case %s: %s", case_num, e)
 

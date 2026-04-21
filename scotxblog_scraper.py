@@ -9,7 +9,7 @@ from uuid import uuid4
 from bs4 import BeautifulSoup
 from util.settings import settings
 
-from core import download_pdf, get_pdf_text, analyze_with_full_text, review_non_family_cases, http
+from core import download_pdf, get_pdf_text, http
 from db.models.opinion_tracking import OpinionTracking
 from db.connection import opinion_tracking_repo
 from util.loggerfactory import LoggerFactory
@@ -62,41 +62,30 @@ async def run_scotx_bot():
         pdf_path = download_pdf(link_tag['href'], case_num)  # type: ignore
         if not pdf_path: continue
 
-        # 2. Extract Text & Analyze
+        # 2. Extract Text (LLM classification is handled by classify_opinions stage)
         opinion_text = get_pdf_text(pdf_path)
-        analysis = await analyze_with_full_text(case_name, opinion_text)
 
-        # 3. Save to Sheet
-        status = "pending-blog" if analysis.family_law else "pending-family-review"
+        # 3. Save raw scraped row at status='pending-analysis'
         opinion = OpinionTracking(
             case_number=case_num,
-            status=status,
-            is_family_law=analysis.family_law,
-            headline=analysis.headline,
-            legal_issue=analysis.legal_issue,
-            holding=analysis.holding,
+            status="pending-analysis",
+            is_family_law=False,
+            headline=f"{case_name} (SCOTX)",
+            legal_issue="",
+            holding="",
             opinion_link=link_tag['href'],  # type: ignore
             processed_at=datetime.now(),
             court="SCOTX",
             opinion_date=datetime.strptime(tds[2].get_text(strip=True), "%Y-%m-%d").date(),
-            case_name=analysis.case_name,
-            lower_court_name=analysis.lower_court_name,
-            seo_title=analysis.seo_title,
-            seo_focus_kw=analysis.seo_focuskw,
-            meta_description=analysis.meta_description,
+            case_name=case_name,
             case_key=str(uuid4()),
             opinion_text=opinion_text
         )
         try:
             opinion_tracking_repo.insert(opinion.model_dump(mode="json"))
-            logger.info("Processed %s: %s", case_num, analysis.headline)
+            logger.info("Scraped %s: %s", case_num, case_name)
         except Exception as e:
             logger.error(e)
-
-    # Follow up pass to see if any cases that weren't directly related to family law
-    # might have a procedural or evidentiary element that is relevant to family law attorneys.
-    logger.info("Looking for relevant angle in non-faily cases")
-    await review_non_family_cases()
 
 if __name__ == "__main__":
     logger.info("Starting SCOTXBLOG scraper bot")

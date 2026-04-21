@@ -17,6 +17,12 @@ class Settings(BaseSettings):
     # AI Parameters
     max_opinion_size: int = 12000
 
+    # Twilio Settings
+    twilio_account_sid: str = ""
+    twilio_auth_token: str = ""
+    twilio_phone_number: str = ""
+    operator_phone_number: str = ""
+
     # For Posting to Blog
     wp_base_url: str = "https://www.thomasjdaley.com/wp-json/wp/v2"
     wp_username: str = "tdaley"

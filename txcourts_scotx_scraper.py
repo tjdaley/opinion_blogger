@@ -8,7 +8,7 @@ from uuid import uuid4
 from bs4 import BeautifulSoup, ResultSet
 from bs4.element import Tag
 
-from core import download_pdf, get_pdf_text, analyze_with_full_text, review_non_family_cases, http
+from core import download_pdf, get_pdf_text, http
 from db.models.opinion_tracking import OpinionTracking
 from db.connection import opinion_tracking_repo
 from util.loggerfactory import LoggerFactory
@@ -101,33 +101,25 @@ async def scrape_tx_courts():
             if not pdf_path: continue
 
             full_text = get_pdf_text(pdf_path)
-            analysis = await analyze_with_full_text(case_name, full_text)
 
-            # Save to Sheet (Using your same row format)
-            status = "pending-blog" if analysis.family_law else "pending-family-review"
+            # Insert raw scraped row; classify_opinions picks it up next.
             opinion = OpinionTracking(
                 case_number=case_num,
-                status=status,
-                is_family_law=analysis.family_law,
-                headline=analysis.headline,
-                legal_issue=analysis.legal_issue,
-                holding=analysis.holding,
+                status="pending-analysis",
+                is_family_law=False,
+                headline=f"{case_name} (SCOTX)",
+                legal_issue="",
+                holding="",
                 opinion_link=pdf_url,  # type: ignore
                 processed_at=datetime.now(),
                 court="SCOTX",
                 opinion_date=datetime.strptime(opinion_date_str, "%Y-%m-%d").date(),
-                case_name=analysis.case_name,
-                lower_court_name=analysis.lower_court_name,
-                seo_title=analysis.seo_title,
-                seo_focus_kw=analysis.seo_focuskw,
-                meta_description=analysis.meta_description,
+                case_name=case_name,
                 case_key=str(uuid4()),
                 opinion_text=full_text
             )
             opinion_tracking_repo.insert(opinion.model_dump(mode="json"))
-            logger.info("Processed %s: %s", case_num, analysis.headline)
-
-    await review_non_family_cases()
+            logger.info("Scraped %s: %s", case_num, case_name)
 
 if __name__ == "__main__":
     logger.info("Starting TX Courts SCOTX scraper bot")

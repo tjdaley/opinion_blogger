@@ -15,3 +15,6 @@ supabase
 postgrest
 tenacity
 tjd-db-handler
+twilio
+fastapi
+uvicorn[standard]

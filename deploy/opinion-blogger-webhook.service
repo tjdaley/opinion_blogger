@@ -1,0 +1,17 @@
+[Unit]
+Description=Opinion blogger SMS webhook (FastAPI)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/opinion_blogger
+EnvironmentFile=/home/ubuntu/opinion_blogger/.env
+ExecStart=/home/ubuntu/opinion_blogger/venv/bin/uvicorn notifier_webhook:app --host 127.0.0.1 --port 8080
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

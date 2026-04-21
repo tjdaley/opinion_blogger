@@ -7,6 +7,7 @@ Usage:
     python scraper_job.py scrape           # Run all scrapers (SCOTX + COA)
     python scraper_job.py scrape scotx     # Run only SCOTX scraper
     python scraper_job.py scrape coa       # Run only COA scraper
+    python scraper_job.py classify         # Run LLM classification on pending-analysis rows
     python scraper_job.py analyze          # Run opinion analyzer / blog generator
     python scraper_job.py upload           # Run WordPress uploader
     python scraper_job.py repair           # Run repair functions
@@ -14,6 +15,7 @@ Usage:
 
 import argparse
 import asyncio
+import notifier
 from core import ensure_directories
 from util.loggerfactory import LoggerFactory
 from util.settings import settings
@@ -32,6 +34,13 @@ async def cmd_scrape(target: str = "all"):
         from tx_coa_scraper import scrape_coa_opinions
         logger.info("Running COA scraper")
         await scrape_coa_opinions()
+
+async def cmd_classify():
+    """Classify pending-analysis opinions (family-law check + metadata extraction)."""
+    from classify_opinions import classify_pending
+    logger.info("Running opinion classifier")
+    await classify_pending()
+
 
 async def cmd_analyze():
     """Run the opinion analyzer and blog post generator."""
@@ -82,11 +91,19 @@ def cmd_trash_empty_posts():
     logger.info("Trashed %d empty published posts out of %d found.", result["trashed"], result["found"])
 
 async def cmd_all():
-    """Run the full pipeline: scrape -> analyze -> upload."""
-    await cmd_scrape("all")
-    await cmd_analyze()
-    cmd_upload()
-    await cmd_promote_to_branding()
+    """Run the full pipeline: scrape -> classify -> analyze -> upload -> promote."""
+    try:
+        await cmd_scrape("all")
+        await cmd_classify()
+        await cmd_analyze()
+        cmd_upload()
+        await cmd_promote_to_branding()
+    except Exception:
+        # Let the process exit nonzero so systemd's OnFailure= sends the crash SMS.
+        logger.exception("Pipeline run failed")
+        raise
+
+    notifier.send(f"Pipeline done. {notifier.status_summary()}")
 
 
 def main():
@@ -102,6 +119,9 @@ def main():
         choices=["all", "scotx", "coa"],
         help="Which scraper to run (default: all)"
     )
+
+    # classify
+    subparsers.add_parser("classify", help="Run LLM classification on pending-analysis rows")
 
     # analyze
     subparsers.add_parser("analyze", help="Run opinion analyzer and blog post generator")
@@ -139,6 +159,8 @@ def main():
 
     if command == "scrape":
         asyncio.run(cmd_scrape(args.target))
+    elif command == "classify":
+        asyncio.run(cmd_classify())
     elif command == "analyze":
         asyncio.run(cmd_analyze())
     elif command == "upload":

@@ -1,0 +1,13 @@
+[Unit]
+Description=Opinion blogger pipeline run
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/opinion_blogger
+EnvironmentFile=/home/ubuntu/opinion_blogger/.env
+ExecStart=/home/ubuntu/opinion_blogger/venv/bin/python scraper_job.py all
+OnFailure=opinion-blogger-failure.service
