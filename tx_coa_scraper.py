@@ -1,7 +1,6 @@
 from datetime import datetime, timedelta
 from urllib.parse import urljoin
-from bs4 import BeautifulSoup, ResultSet
-from bs4.element import NavigableString
+from bs4 import BeautifulSoup
 from uuid import uuid4
 
 from core import download_pdf, get_pdf_text, analyze_with_full_text, http, BROWSER_HEADERS
@@ -16,6 +15,34 @@ logger = LoggerFactory.create_logger(__name__, "DEBUG")
 BASE_URL = settings.coa_base_url
 COA_LIST = [f"coa{i:02d}" for i in range(1, 15)]
 LOOKBACK_DAYS = settings.coa_lookback_days
+
+async def _process_date_links(soup: BeautifulSoup, coa: str, label: str):
+    """Find date links in the docket-dates grid and process ones inside the lookback window."""
+    all_tables = soup.find_all('table', id=True)
+    logger.debug("(%s) Found %d tables with IDs: %s", label, len(all_tables), [t.get('id') for t in all_tables])
+
+    date_table = soup.find('table', id=lambda x: x and x.endswith('grdDocketDates_ctl00'))  # type: ignore
+    if not date_table:
+        logger.warning("(%s) Date table not found for %s.", label, coa)
+        return
+
+    links = date_table.find_all('a', href=lambda x: x and "FullDate=" in x)  # type: ignore
+    if not links:
+        logger.warning("(%s) No navigable date links found for %s.", label, coa)
+        return
+
+    for link in links:  # type: ignore
+        date_text = link.get_text(strip=True)  # type: ignore
+        if not date_text:
+            continue
+        logger.info("--- (%s) Processing Date: %s ---", label, date_text)  # type: ignore
+        if is_recent(date_text):  # type: ignore
+            docket_url = urljoin(BASE_URL, link['href'])  # type: ignore
+            logger.info("Found recent date %s. Processing docket page: %s", date_text, docket_url)  # type: ignore
+            await process_docket_page(coa, docket_url, date_text)  # type: ignore
+        else:
+            logger.info("Skipping date %s as it is outside the lookback window.", date_text)  # type: ignore
+
 
 def is_recent(date_str: str) -> bool:
     """Checks if the date string (MM/DD/YYYY) is within the 10-day lookback window."""
@@ -47,6 +74,10 @@ async def scrape_coa_opinions():
             logger.debug("GET response status: %s, content-type: %s", resp.status_code, resp.headers.get('content-type'))
             logger.debug("Response length: %d bytes", len(resp.text))
 
+            # Debug: Save the raw HTML response for the index page to analyze structure and potential anti-scraping measures
+            with open(f"debug_{coa}.html", "w", encoding="utf-8") as f:
+                f.write(resp.text)  # Save the raw HTML for debugging
+
             initial_soup = BeautifulSoup(resp.text, 'html.parser')
 
             # Debug: Check for all input fields
@@ -63,51 +94,38 @@ async def scrape_coa_opinions():
                 logger.debug("First 500 chars of response: %s", resp.text[:500])
                 continue
 
-            # Prepare POST data with all required form fields
-            current_year = datetime.now().year
-            post_data = {  # type: ignore
-                '__EVENTTARGET': '',
-                '__EVENTARGUMENT': '',
-                '__VIEWSTATE': viewstate.get('value', ''),
-                '__VIEWSTATEGENERATOR': viewstategenerator.get('value', '') if viewstategenerator else '',
-                '__EVENTVALIDATION': eventvalidation.get('value', '') if eventvalidation else '',
-                'ctl00$ContentPlaceHolder1$ddlYear': str(current_year),
-                'ctl00$ContentPlaceHolder1$ddlQuarter': '01-01-',  # Q1
-                'ctl00$ContentPlaceHolder1$btnSearch': 'Refresh',
-                'ctl00_ContentPlaceHolder1_grdDocketDates_ClientState': ''
-            }
+            # The initial GET already returns the current-quarter docket dates
+            # (the site's ddlQuarter defaults to the current quarter), so parse it directly.
+            await _process_date_links(initial_soup, coa, label="current quarter")
 
-            # Make POST request to get the actual data (include headers to avoid 403)
-            resp = http.post(index_url, data=post_data, headers=headers, timeout=20)  # type: ignore
-            soup = BeautifulSoup(resp.text, 'html.parser')
-
-            # Debug: Print all table IDs to see what's actually on the page
-            all_tables = soup.find_all('table', id=True)
-            logger.debug("Found %d tables with IDs: %s", len(all_tables), [t.get('id') for t in all_tables])
-
-            date_table = soup.find('table', id=lambda x: x and x.endswith('grdDocketDates_ctl00'))  # type: ignore
-            if not date_table:
-                logger.warning("Date table not found. Skipping %s", coa)
-                continue
-
-            links = date_table.find_all('a', href=lambda x: x and "FullDate=" in x)  # type: ignore
-            links: ResultSet[NavigableString]
-
-            if not links:
-                logger.warning("No navigable date links found. Skipping %s", coa)
-                continue
-
-            for link in links:  # type: ignore
-                date_text = link.get_text(strip=True)  # type: ignore
-                if not date_text:
-                    continue
-                logger.info("--- Processing Date: %s ---", date_text)  # type: ignore
-                if date_text and is_recent(date_text):  # type: ignore
-                    docket_url = urljoin(BASE_URL, link['href'])  # type: ignore
-                    logger.info("Found recent date %s. Processing docket page: %s", date_text, docket_url)  # type: ignore
-                    await process_docket_page(coa, docket_url, date_text)  # type: ignore
+            # If the lookback window crosses into the previous quarter, fetch that too via POST.
+            now = datetime.now()
+            current_q_month = ((now.month - 1) // 3) * 3 + 1
+            days_into_quarter = (now - datetime(now.year, current_q_month, 1)).days
+            if days_into_quarter < LOOKBACK_DAYS:
+                if current_q_month == 1:
+                    prev_year, prev_q_month = now.year - 1, 10
                 else:
-                    logger.info("Skipping date %s as it is outside the lookback window.", date_text)  # type: ignore
+                    prev_year, prev_q_month = now.year, current_q_month - 3
+                prev_q_label = f"{prev_year}-Q{(prev_q_month - 1) // 3 + 1}"
+                logger.info("Lookback spans previous quarter; fetching %s via POST.", prev_q_label)
+
+                post_data = {  # type: ignore
+                    '__EVENTTARGET': '',
+                    '__EVENTARGUMENT': '',
+                    '__VIEWSTATE': viewstate.get('value', ''),
+                    '__VIEWSTATEGENERATOR': viewstategenerator.get('value', '') if viewstategenerator else '',
+                    '__EVENTVALIDATION': eventvalidation.get('value', '') if eventvalidation else '',
+                    'ctl00$ContentPlaceHolder1$ddlYear': str(prev_year),
+                    'ctl00$ContentPlaceHolder1$ddlQuarter': f'{prev_q_month:02d}-01-',
+                    'ctl00$ContentPlaceHolder1$btnSearch': 'Refresh',
+                    'ctl00_ContentPlaceHolder1_grdDocketDates_ClientState': ''
+                }
+                resp = http.post(index_url, data=post_data, headers=headers, timeout=20)  # type: ignore
+                with open(f"debug_{coa}_post.html", "w", encoding="utf-8") as f:
+                    f.write(resp.text)
+                prev_soup = BeautifulSoup(resp.text, 'html.parser')
+                await _process_date_links(prev_soup, coa, label=prev_q_label)
 
         except Exception as e:
             logger.error("Error reaching index for %s: %s", coa, e)
@@ -182,7 +200,7 @@ async def process_docket_page(coa_id: str, url: str, release_date: str):
                 logger.info("Analysis for case %s: %s", case_num, analysis)
 
                 # --- DB INSERTION ---
-                status = "pending-blog" if analysis.family_law else "pending-review"
+                status = "pending-blog" if analysis.family_law else "pending-family-review"
                 opinion = OpinionTracking(
                     case_number=case_num,
                     status=status,

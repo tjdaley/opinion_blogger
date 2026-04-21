@@ -14,3 +14,4 @@ scikit-learn
 supabase
 postgrest
 tenacity
+tjd-db-handler

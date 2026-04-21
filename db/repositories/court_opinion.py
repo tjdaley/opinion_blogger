@@ -4,10 +4,8 @@ db/repositories/court_opinion.py - Repository for CourtOpinion model using Supab
 import datetime
 from typing import Union
 
-from db.databasemanager import NOT_NULL
 from db.models.court_opinion import CourtOpinionInDB
-from db.repositories.base_repo import BaseRepository
-from db.supabasemanager import DatabaseManager
+from db_handler import DatabaseManager, BaseRepository, NOT_NULL
 
 class OpinionRepository(BaseRepository[CourtOpinionInDB]):
     def __init__(self, manager: DatabaseManager):

@@ -4,8 +4,7 @@ db/repositories/canonical_question.py - Repository for CanonicalQuestion model
 from typing import Any
 
 from db.models.canonical_question import CanonicalQuestionRecordInDB
-from db.repositories.base_repo import BaseRepository
-from db.databasemanager import DatabaseManager
+from db_handler import DatabaseManager, BaseRepository
 
 
 class CanonicalQuestionRepository(BaseRepository[CanonicalQuestionRecordInDB]):

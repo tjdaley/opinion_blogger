@@ -113,10 +113,10 @@ def opinion_text(row: OpinionTrackingInDB, page_limit: int = 5) -> str:
 
 async def review_non_family_cases():
     """
-    Reviews 'pending-review' cases (including Criminal) for Family Law relevance.
+    Reviews 'pending-family-review' cases (including Criminal) for Family Law relevance.
     """
     records, _ = opinion_tracking_repo.select_many(
-        condition={"status": "pending-review", 'is_family_law': False}
+        condition={"status": "pending-family-review", 'is_family_law': False}
     )
     records: List[OpinionTrackingInDB]
 
@@ -146,7 +146,7 @@ async def review_non_family_cases():
         except Exception as e:
             # Handle Gemini content filter blocks or other API errors
             logger.error("Error analyzing case %s: %s. Marking for manual review.", row.case_number, e)
-            row.status = "pending-review"  # Keep in pending-review for manual review
+            row.status = "pending-family-review"  # Keep in pending-family-review for manual review
             continue
 
         opinion_tracking_repo.update(row.id, row.model_dump(mode="json"))

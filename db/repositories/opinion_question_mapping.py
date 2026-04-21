@@ -4,8 +4,7 @@ db/repositories/opinion_question_mapping.py - Repository for OpinionQuestionMapp
 from typing import Any
 
 from db.models.canonical_question import OpinionQuestionMappingInDB
-from db.repositories.base_repo import BaseRepository
-from db.databasemanager import DatabaseManager
+from db_handler import DatabaseManager, BaseRepository
 
 
 class OpinionQuestionMappingRepository(BaseRepository[OpinionQuestionMappingInDB]):

@@ -67,7 +67,7 @@ async def run_scotx_bot():
         analysis = await analyze_with_full_text(case_name, opinion_text)
 
         # 3. Save to Sheet
-        status = "pending-blog" if analysis.family_law else "pending-review"
+        status = "pending-blog" if analysis.family_law else "pending-family-review"
         opinion = OpinionTracking(
             case_number=case_num,
             status=status,

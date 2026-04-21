@@ -142,8 +142,11 @@ def configure_model(mode: str = "chat", override_vendor: Optional[str] = None, o
     if llm_vendor == 'anthropic':
         from pydantic_ai.models.anthropic import AnthropicModel
         from pydantic_ai.providers.anthropic import AnthropicProvider
+        # Claude 4.x models (Opus 4.5+, Sonnet 4.6+, Haiku 4.5+, Opus 4.7) deprecated
+        # `temperature` and `top_p` — the API returns 400 if sent. Pass empty settings.
+        anthropic_settings = ModelSettings()
         provider = AnthropicProvider(api_key=settings.anthropic_api_key)
-        model = AnthropicModel(override_model or settings.anthropic_model, provider=provider, settings=model_settings)
+        model = AnthropicModel(override_model or settings.anthropic_model, provider=provider, settings=anthropic_settings)
         return model
 
     if llm_vendor == 'groq':

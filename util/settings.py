@@ -43,6 +43,9 @@ class Settings(BaseSettings):
     coa_base_url: str = "https://search.txcourts.gov/"
     coa_lookback_days: int = 10
 
+    # SCOTX Web site Settings
+    scotx_recent_heading: str = "Recently Released"
+
     # Logging settings
     log_format: str = "{asctime} | {levelname:<8s} | {name:<25s} | {message}"
     log_level: str = "WARNING"  # Default log level for API
@@ -96,7 +99,7 @@ class Settings(BaseSettings):
     
     class Config:
         env_file = ".env"
-        # extra = "forbid"  # Pydantic will throw an error if unexpected env vars are present
+        extra = "forbid"  # Pydantic will throw an error if unexpected env vars are present
 
     def getattr(self, item: str, default: Optional[str] = None):
         """Get an attribute from the settings"""

@@ -67,6 +67,19 @@ async def cmd_repair_q_and_a():
     logger.info("Running repair: migrate Q&A")
     await migrate_q_and_a_for_opinions()
 
+def cmd_trash_empty_drafts():
+    """Trash any empty drafts in WordPress to avoid clutter."""
+    from wp_uploader import trash_empty_posts
+    logger.info("Trashing empty drafts in WordPress")
+    result = trash_empty_posts()
+    logger.info("Trashed %d empty drafts out of %d found.", result["trashed"], result["found"])
+
+def cmd_trash_empty_posts():
+    """Trash any empty posts in WordPress to avoid clutter."""
+    from wp_uploader import trash_empty_posts
+    logger.info("Trashing empty posts in WordPress")
+    result = trash_empty_posts(status="publish")
+    logger.info("Trashed %d empty published posts out of %d found.", result["trashed"], result["found"])
 
 async def cmd_all():
     """Run the full pipeline: scrape -> analyze -> upload."""
@@ -103,6 +116,8 @@ def main():
     subparsers.add_parser("repair-case-names", help="Run repair functions for case names")
     subparsers.add_parser("repair-q-and-a", help="Run repair functions for Q&A")
     subparsers.add_parser("delete-empty", help="Delete opinions that have no content after scraping")
+    subparsers.add_parser("trash-empty-drafts", help="Trash empty drafts in WordPress")
+    subparsers.add_parser("trash-empty-posts", help="Trash empty published posts in WordPress")
 
     # index
     subparsers.add_parser("index", help="Run Google indexing for opinions that haven't been indexed yet")
@@ -142,7 +157,11 @@ def main():
         asyncio.run(delete_empty_opinions())
     elif command == "promote-to-branding":
         asyncio.run(cmd_promote_to_branding())
-
+    elif command == "trash-empty-drafts":
+        cmd_trash_empty_drafts()
+    elif command == "trash-empty-posts":
+        cmd_trash_empty_posts()
+        
 if __name__ == "__main__":
     logger.info("Starting scraper job")
     main()

@@ -32,6 +32,39 @@ def get_tag_id(tag_slug: str) -> Union[int, None]:
         return tags[0]['id']
     return None
 
+def trash_empty_posts(status: str = "draft") -> dict[str, int]:
+    """
+    Move any empty drafts to trash to avoid clutter.
+    
+    This happens when the scraper fails to create a draft--usually and LLM problem, such as
+    a rate limit issue. If we trash the empty blog posts, we can rerun the scraper job
+    and instead of re-getting the opinions, the scraper job will pick up at the last failed
+    step, which is usually the blog post creation step.
+
+    Returns:
+
+        A dictionary with the count of drafts found and trashed.
+    """
+    auth = HTTPBasicAuth(WP_USERNAME, WP_APP_PASSWORD)
+    response = requests.get(f"{WP_BASE_URL}/posts?status={status}", auth=auth)
+    posts = response.json()
+    post_count = len(posts)
+    logger.info("Found %d %s posts in WordPress", post_count, status)
+    deleted_count = 0
+    while posts:
+        for post in posts:
+            if not len(post['content']['rendered'].strip()) > 250:  # Arbitrary threshold for "empty"
+                logger.info("Trashing empty draft: %s (ID: %d)", post['title']['rendered'], post['id'])
+                requests.delete(f"{WP_BASE_URL}/posts/{post['id']}?force=true", auth=auth)
+                deleted_count += 1
+        response = requests.get(f"{WP_BASE_URL}/posts?status={status}", auth=auth)
+        posts = response.json()
+        post_count += len(posts)
+        
+    logger.info("Trashed %d empty %s posts.", deleted_count, status)
+
+    return {"found": post_count, "trashed": deleted_count}
+
 
 def upload_to_wordpress(post: OpinionTrackingInDB) -> bool:
     auth = HTTPBasicAuth(WP_USERNAME, WP_APP_PASSWORD)

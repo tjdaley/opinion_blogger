@@ -1,6 +1,9 @@
 # JSON files (including google api credentials)
 *.json
 
+# Debugging files
+debug*.html
+
 # Opinion files
 *.pdf
 scotx/

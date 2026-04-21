@@ -5,12 +5,14 @@ import asyncio
 import re
 from datetime import datetime
 from uuid import uuid4
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, ResultSet
+from bs4.element import Tag
 
 from core import download_pdf, get_pdf_text, analyze_with_full_text, review_non_family_cases, http
 from db.models.opinion_tracking import OpinionTracking
 from db.connection import opinion_tracking_repo
 from util.loggerfactory import LoggerFactory
+from util.settings import settings
 
 logger = LoggerFactory.create_logger(__name__)
 
@@ -23,15 +25,23 @@ async def scrape_tx_courts():
     resp = http.get(TX_START_URL)
     soup = BeautifulSoup(resp.text, 'html.parser')
 
-    # Step 1: Find the "Recently Released" list
-    heading = soup.find('h2', string="Recently Released")  # type: ignore
+    # Step 1: Find the configured "Recently Released" heading
+    heading_label = settings.scotx_recent_heading
+    heading = soup.find('h2', string=heading_label)  # type: ignore
     if not heading:
-        logger.error("Could not find 'Recently Released' heading.")
+        debug_path = "debug_scotx_index.html"
+        with open(debug_path, "w", encoding="utf-8") as f:
+            f.write(resp.text)
+        logger.error(
+            "Could not find heading '%s' at %s. Page saved to %s for inspection. "
+            "If the site changed the label, update settings.scotx_recent_heading.",
+            heading_label, TX_START_URL, debug_path,
+        )
         return
 
-    links: list[dict[str, str]] = heading.find_next('ul').find_all('a')  # type: ignore
+    links: ResultSet[Tag] = heading.find_next('ul').find_all('a')  # type: ignore
     if not links:
-        logger.error("No links found under 'Recently Released'.")
+        logger.error("No links found under '%s'.", heading_label)
         return
 
     for date_link in links:  # type: ignore
@@ -52,7 +62,7 @@ async def scrape_tx_courts():
 
         # Step 2: Find all PDF links matching the "pc" or "digit" pattern
         # Regex: Ends with digits+.pdf or digits+pc.pdf
-        pdf_pattern = re.compile(r'\d{6}+(pc)?\.pdf$', re.IGNORECASE)
+        pdf_pattern = re.compile(r'\d{6}(pc)?\.pdf$', re.IGNORECASE)
         pdf_anchors = page_soup.find_all('a', href=pdf_pattern)
         pdf_anchors = [a for a in pdf_anchors if 'case-summaries' not in a['href']]
 
@@ -94,7 +104,7 @@ async def scrape_tx_courts():
             analysis = await analyze_with_full_text(case_name, full_text)
 
             # Save to Sheet (Using your same row format)
-            status = "pending-blog" if analysis.family_law else "pending-review"
+            status = "pending-blog" if analysis.family_law else "pending-family-review"
             opinion = OpinionTracking(
                 case_number=case_num,
                 status=status,
