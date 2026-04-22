@@ -7,4 +7,4 @@ User=ubuntu
 Group=ubuntu
 WorkingDirectory=/home/ubuntu/opinion_blogger
 EnvironmentFile=/home/ubuntu/opinion_blogger/.env
-ExecStart=/home/ubuntu/opinion_blogger/venv/bin/python3.13 deploy/crash_alert.py
+ExecStart=/home/ubuntu/opinion_blogger/venv/bin/python3.12 deploy/crash_alert.py
