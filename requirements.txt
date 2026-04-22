@@ -16,5 +16,6 @@ postgrest
 tenacity
 tjd-db-handler
 twilio
+clicksend-client
 fastapi
 uvicorn[standard]

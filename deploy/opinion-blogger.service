@@ -9,5 +9,5 @@ User=ubuntu
 Group=ubuntu
 WorkingDirectory=/home/ubuntu/opinion_blogger
 EnvironmentFile=/home/ubuntu/opinion_blogger/.env
-ExecStart=/home/ubuntu/opinion_blogger/venv/bin/python scraper_job.py all
+ExecStart=/home/ubuntu/opinion_blogger/venv/bin/python3.13 scraper_job.py all
 OnFailure=opinion-blogger-failure.service

@@ -23,6 +23,14 @@ class Settings(BaseSettings):
     twilio_phone_number: str = ""
     operator_phone_number: str = ""
 
+    # ClickSend Settings (alternative SMS gateway)
+    clicksend_username: str = ""
+    clicksend_api_key: str = ""
+    clicksend_phone_number: str = ""
+    clicksend_webhook_token: str = ""  # shared secret appended to the webhook URL as ?token=
+
+    notification_vendor: str = "twilio"  # Options: "twilio", "clicksend"
+
     # For Posting to Blog
     wp_base_url: str = "https://www.thomasjdaley.com/wp-json/wp/v2"
     wp_username: str = "tdaley"

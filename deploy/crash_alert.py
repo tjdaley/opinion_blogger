@@ -7,6 +7,6 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import notifier
+from notifier import send
 
-notifier.send("ALERT: opinion-blogger run failed. Check: journalctl -u opinion-blogger -n 200")
+send("ALERT: opinion-blogger run failed. Check: journalctl -u opinion-blogger -n 200")
