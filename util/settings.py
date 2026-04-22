@@ -29,7 +29,12 @@ class Settings(BaseSettings):
     clicksend_phone_number: str = ""
     clicksend_webhook_token: str = ""  # shared secret appended to the webhook URL as ?token=
 
-    notification_vendor: str = "twilio"  # Options: "twilio", "clicksend"
+    # Telegram Bot Settings (alternative messaging channel)
+    telegram_bot_token: str = ""        # from @BotFather
+    telegram_chat_id: str = ""          # operator's numeric chat_id
+    telegram_webhook_secret: str = ""   # sent by Telegram in X-Telegram-Bot-Api-Secret-Token
+
+    notification_vendor: str = "twilio"  # Options: "twilio", "clicksend", "telegram"
 
     # For Posting to Blog
     wp_base_url: str = "https://www.thomasjdaley.com/wp-json/wp/v2"

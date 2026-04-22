@@ -9,6 +9,8 @@ from util.settings import settings
 
 if settings.notification_vendor == "clicksend":
     from clicksend_notifier import send, status_summary
+elif settings.notification_vendor == "telegram":
+    from telegram_notifier import send, status_summary
 else:
     from twilio_notifier import send, status_summary
 
