@@ -119,8 +119,10 @@ async def inbound_sms(request: Request, background_tasks: BackgroundTasks):
 
     logger.info("Inbound ClickSend payload: %s", payload)
 
-    sender = _field(payload, "from", "sender", "originalsenderid")
-    body = _field(payload, "body", "message", "originalbody")
+    # Documented ClickSend inbound fields: from, body, to, message_id,
+    # timestamp_send, custom_string, original_body, original_message_id, _keyword.
+    sender = _field(payload, "from")
+    body = _field(payload, "body")
 
     # 3. Sender authorization — only the operator can issue commands
     if sender != settings.operator_phone_number:
