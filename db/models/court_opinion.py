@@ -20,6 +20,9 @@ class CourtOpinion(BaseModel):
     google_index_requested_at: Optional[datetime.datetime] = None
     case_name_corrected: bool = False
     q_and_a: Optional[list[QandA]] = None
+    tags_top_k: Optional[list[str]] = None
+    tags_discarded: Optional[list[str]] = None
+    tag_rationale: Optional[str] = None
 
 
 class CourtOpinionInDB(CourtOpinion):
