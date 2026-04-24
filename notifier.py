@@ -8,10 +8,10 @@ imports from here only and never sees the gateway-specific modules directly.
 from util.settings import settings
 
 if settings.notification_vendor == "clicksend":
-    from clicksend_notifier import send, status_summary
+    from notifiers.clicksend.clicksend_notifier import send, status_summary
 elif settings.notification_vendor == "telegram":
-    from telegram_notifier import send, status_summary
+    from notifiers.telegram.telegram_notifier import send, status_summary
 else:
-    from twilio_notifier import send, status_summary
+    from notifiers.twilio.twilio_notifier import send, status_summary
 
 __all__ = ["send", "status_summary"]

@@ -13,6 +13,7 @@ class CaseAnalysis(BaseModel):
     seo_title: str
     seo_focuskw: str
     meta_description: str
+    has_substance: bool
 
 # Lazy singleton pattern to avoid event loop issues
 _case_analysis_agent: Agent[None, CaseAnalysis] | None = None

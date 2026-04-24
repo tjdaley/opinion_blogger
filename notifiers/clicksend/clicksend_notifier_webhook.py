@@ -19,7 +19,7 @@ from typing import Any, Dict
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 
-import clicksend_notifier
+import notifiers.clicksend.clicksend_notifier as clicksend_notifier
 from db.connection import opinion_tracking_repo
 from util.loggerfactory import LoggerFactory
 from util.settings import settings

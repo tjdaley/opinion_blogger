@@ -1,5 +1,5 @@
 """
-notifier_webhook.py - FastAPI webhook that receives inbound SMS from Twilio.
+twilio_notifier_webhook.py - FastAPI webhook that receives inbound SMS from Twilio.
 
 Runs as a long-lived service on the same host as the pipeline. HAProxy routes
 https://sms.jdbot.us/webhooks/twilio/sms to this app on 127.0.0.1:8080.
@@ -11,9 +11,9 @@ Commands (v1):
 """
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.responses import Response
-from twilio.request_validator import RequestValidator
+from twilio.request_validator import RequestValidator  # type: ignore
 
-import twilio_notifier
+import notifiers.twilio.twilio_notifier as twilio_notifier
 from db.connection import opinion_tracking_repo
 from util.loggerfactory import LoggerFactory
 from util.settings import settings
@@ -72,7 +72,7 @@ async def inbound_sms(request: Request, background_tasks: BackgroundTasks):
     signature = request.headers.get("X-Twilio-Signature", "")
     validator = RequestValidator(settings.twilio_auth_token)
     post_vars = {k: v for k, v in form.items()}  # type: ignore
-    if not validator.validate(WEBHOOK_URL, post_vars, signature):
+    if not validator.validate(WEBHOOK_URL, post_vars, signature):  # type: ignore
         logger.warning("Twilio signature validation failed")
         raise HTTPException(status_code=403, detail="Invalid signature")
 
@@ -83,14 +83,14 @@ async def inbound_sms(request: Request, background_tasks: BackgroundTasks):
         logger.warning("Rejecting SMS from unauthorized sender %s", sender)
         return _twiml("Unauthorized.")
 
-    logger.info("Inbound SMS from %s: %s", sender, body)
+    logger.info("Inbound SMS from %s: %s", sender, body)  # type: ignore
 
-    parts = body.split(maxsplit=1)
+    parts: list[str] = body.split(maxsplit=1)  # type: ignore
     if not parts:
         return _twiml(HELP_TEXT)
 
-    cmd = parts[0].lower()
-    arg = parts[1].strip() if len(parts) > 1 else ""
+    cmd = parts[0].lower()  # type: ignore
+    arg = parts[1].strip() if len(parts) > 1 else ""  # type: ignore
 
     if cmd == "status":
         return _twiml(twilio_notifier.status_summary())
@@ -98,7 +98,7 @@ async def inbound_sms(request: Request, background_tasks: BackgroundTasks):
     if cmd == "retry":
         if not arg:
             return _twiml("Usage: retry <case_number>")
-        background_tasks.add_task(_run_retry, arg)
+        background_tasks.add_task(_run_retry, arg)  # type: ignore
         return _twiml(f"Queued retry for {arg}. Will SMS when done.")
 
     if cmd == "help":

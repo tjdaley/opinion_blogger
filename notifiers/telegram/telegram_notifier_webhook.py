@@ -11,7 +11,7 @@ sendMessage call via telegram_notifier.send().
 """
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 
-import telegram_notifier
+import notifiers.telegram.telegram_notifier as telegram_notifier
 from db.connection import opinion_tracking_repo
 from util.loggerfactory import LoggerFactory
 from util.settings import settings
@@ -99,7 +99,7 @@ async def inbound_update(request: Request, background_tasks: BackgroundTasks):
         # Not a text update (e.g., callback_query, channel_post) — ignore for v1.
         return {"status": "ignored"}
 
-    chat_id = str((message.get("chat") or {}).get("id", ""))
+    chat_id = str((message.get("chat", {}) or {}).get("id", ""))  # type: ignore
     text = (message.get("text") or "").strip()
 
     # 2. Authorization: only the operator's chat can issue commands.

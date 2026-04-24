@@ -25,7 +25,7 @@ def send(message: str) -> bool:
     url = f"{API_BASE}/bot{settings.telegram_bot_token}/sendMessage"
     try:
         # Telegram messages max out at 4096 chars — cap under that to be safe.
-        payload = {
+        payload: dict[str, str | bool] = {
             "chat_id": settings.telegram_chat_id,
             "text": message[:4000],
             "disable_web_page_preview": True,
@@ -52,7 +52,7 @@ def status_summary() -> str:
         "pending-blog",
         "rejected",
     ]
-    parts = []
+    parts: list[str] = []
     for s in statuses:
         try:
             _, count = opinion_tracking_repo.select_many(condition={"status": s})  # type: ignore

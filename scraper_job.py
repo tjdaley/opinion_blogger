@@ -15,7 +15,7 @@ Usage:
 
 import argparse
 import asyncio
-import notifier
+import notifier as notifier
 from core import ensure_directories
 from util.loggerfactory import LoggerFactory
 from util.settings import settings
@@ -90,6 +90,12 @@ def cmd_trash_empty_posts():
     result = trash_empty_posts(status="publish")
     logger.info("Trashed %d empty published posts out of %d found.", result["trashed"], result["found"])
 
+def cmd_tag_opinions():
+    """Run opinion tagger to add tags to opinions based on their content."""
+    from opinion_tagger import run_backfill
+    logger.info("Running opinion tagger")
+    asyncio.run(run_backfill(dry_run=True, limit=10))
+
 async def cmd_all():
     """Run the full pipeline: scrape -> classify -> analyze -> upload -> promote."""
     try:
@@ -144,6 +150,7 @@ def main():
 
     # Promote to Branding
     subparsers.add_parser("promote-to-branding", help="Run promote to branding migration")
+    subparsers.add_parser("tag-opinions", help="Run opinion tagger to add tags to opinions based on their content")
 
     args = parser.parse_args()
 
@@ -183,7 +190,11 @@ def main():
         cmd_trash_empty_drafts()
     elif command == "trash-empty-posts":
         cmd_trash_empty_posts()
-        
+    elif command == "tag-opinions":
+        cmd_tag_opinions()
+    else:
+        logger.error("Unknown command: %s", command)
+
 if __name__ == "__main__":
     logger.info("Starting scraper job")
     main()

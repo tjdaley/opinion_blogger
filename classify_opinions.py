@@ -50,7 +50,12 @@ async def _classify_one(row: OpinionTrackingInDB, semaphore: asyncio.Semaphore) 
         row.seo_title = analysis.seo_title
         row.seo_focus_kw = analysis.seo_focuskw
         row.meta_description = analysis.meta_description
-        row.status = "pending-blog" if analysis.family_law else "pending-family-review"
+        row.has_substance = analysis.has_substance
+        if not row.has_substance:
+            logger.info("Case %s classified as having no substance; setting status to 'no-substance'", row.case_number)
+            row.status = "no-substance"
+        else:
+            row.status = "pending-blog" if analysis.family_law else "pending-family-review"
 
         try:
             opinion_tracking_repo.update(row.id, row.model_dump(mode="json"))

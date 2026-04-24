@@ -35,14 +35,19 @@ CONSERVATORSHIP
 - joint-managing-conservatorship
 - sole-managing-conservatorship
 - parental-presumption
-- best-interest-holley-factors
+
+- best-interest-holley-factors: Holley factor analysis in 
+  conservatorship disputes between parents or non-parents,
+  not termination cases where best-interest is addressed 
+  via termination-best-interest
+
 - modification-material-substantial-change
 - relocation
 - right-of-first-refusal
 - ad-litem-amicus
 - grandparent-access
-- non-parent-standing
-- third-party-standing
+- non-parent-standing: standing of a non-parent to seek conservatorship or possession under TFC §102.003 — not intervention or other third-party participation
+- third-party-standing: standing of any non-party to intervene or participate, including grandparents under §153.432 when conservatorship is not sought
 
 POSSESSION & ACCESS
 - standard-possession-order
@@ -63,17 +68,22 @@ SUPPORT
 - contractual-alimony
 
 PROTECTIVE ORDERS
-- family-violence-finding
+- family-violence-finding: a court's affirmative finding of family violence under TFC §71.004; its effect on conservatorship under §153.004 or protective order issuance — not merely an allegation or background fact
 - protective-order-issuance
 - protective-order-modification-termination
 - emergency-protective-order-magistrate
 
 ENFORCEMENT & CONTEMPT
-- contempt-civil
-- contempt-criminal
+- contempt-civil: coercive contempt to compel future compliance; purgeable by compliance
+- contempt-criminal: punitive contempt for past violations; not purgeable — includes flat jail sentences
 - enforcement-property-division
 - enforcement-support
-- writ-of-habeas-corpus
+
+- writ-of-habeas-corpus: actual habeas corpus original 
+  proceeding challenging confinement — not a mandamus 
+  proceeding that discusses habeas jurisdiction in passing 
+  to explain why mandamus is the correct vehicle
+  
 - turnover-relief
 
 TERMINATION & ADOPTION
@@ -98,20 +108,80 @@ JURISDICTION
 - personal-jurisdiction
 
 PROCEDURE & APPELLATE
-- temporary-orders-tfc-6501
-- temporary-injunction-standards
-- finality-severance
-- preservation-of-error
-- mandamus-standards
-- interlocutory-appeal
-- abuse-of-discretion
-- de-novo-review
-- summary-judgment
-- default-judgment
-- vexatious-litigant-chapter-11
-- sanctions-litigation-abuse
-- service-of-process
-- prisoner-mailbox-rule
+
+- temporary-orders-tfc-6501: temporary orders in divorce proceedings 
+  under TFC §6.501; injunctive relief freezing assets or conduct 
+  during pending divorce — not standalone TI standards
+
+- temporary-injunction-standards: elements for temporary injunction 
+  (probable right, probable harm, inadequate remedy at law); 
+  application and abuse of discretion in granting or denying — 
+  not TFC §6.501 automatic injunctions
+
+- finality-severance: whether a judgment or order is final and 
+  appealable; severance as a mechanism to create finality in 
+  multi-party or multi-claim cases — not procedural dismissals 
+  or default
+
+- appellate-perfection-requirements: filing fees, clerk's record 
+  costs, indigence statements, DWOP dismissals, TRAP 5/20.1/37.3/
+  42.3 compliance — not substantive appellate standards of review
+
+- preservation-of-error: trial-level objection, offer of proof, 
+  running objection, request for findings; whether error was 
+  preserved for appellate review — not the standard of review 
+  applied on appeal
+
+- mandamus-standards: original proceeding standards — clear abuse 
+  of discretion, no adequate remedy by appeal; when mandamus is 
+  the correct vehicle — not abuse of discretion as a standard 
+  of review on direct appeal
+
+- interlocutory-appeal: immediate appeal from a non-final order 
+  specifically authorized by CPRC §51.014 or TFC §105.001(e); 
+  requires a final judgment to eventually exist — not mandamus 
+  or habeas original proceedings, not accelerated termination 
+  appeals, not DWOP dismissals
+
+- abuse-of-discretion: standard of review applied on direct appeal 
+  where trial court has discretion; factual and legal sufficiency 
+  in that context — not mandamus abuse-of-discretion analysis
+
+- de-novo-review: standard of review for pure questions of law, 
+  statutory construction, jurisdiction — not factual sufficiency 
+  or abuse of discretion
+
+- summary-judgment: traditional or no-evidence motion for summary 
+  judgment; whether genuine issue of material fact exists — 
+  not default, not dismissal for want of prosecution
+
+- default-judgment: judgment entered on failure to answer or appear; 
+  motion to set aside default; Craddock test — not DWOP, not 
+  summary judgment
+
+- vexatious-litigant-chapter-11: TCPRC Chapter 11 designation, 
+  security requirements, prefiling orders — not general sanctions 
+  or litigation abuse
+
+- sanctions-litigation-abuse: Rule 13, Chapter 10, or inherent 
+  authority sanctions for frivolous pleadings or bad faith conduct 
+  — not Chapter 11 vexatious litigant, not discovery sanctions
+
+- service-of-process: citation issuance, waiver of service, 
+  substituted service authorization, return of service 
+  sufficiency — not appellate notices, not clerk deficiency 
+  notices, not proof of confinement in habeas, not 
+  "service" of documents between counsel
+
+- prisoner-mailbox-rule: pro se inmate filing deemed timely when 
+  delivered to prison authorities; proof requirements per Warner 
+  and Ramos — not general service or filing deadlines
+
+- preservation-of-error: trial-level objection, offer of proof, 
+  running objection, request for findings of fact and conclusions 
+  of law; whether a complaint was preserved for appellate review 
+  — not applicable in original proceedings (mandamus, habeas) 
+  where the issue is the trial court's current conduct
 
 EVIDENCE & DISCOVERY
 - discovery-scope-proportionality

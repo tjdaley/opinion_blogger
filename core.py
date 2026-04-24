@@ -94,7 +94,7 @@ async def analyze_with_full_text(case_name: str, full_text: str) -> CaseAnalysis
     Returns:
         Instance of CaseAnalysis
     """
-    prompt = case_analysis_user_prompt.format(case_name=case_name, opinion_text=full_text)
+    prompt = case_analysis_user_prompt.format(opinion_text=full_text)
     result = await get_case_analysis_agent().run(user_prompt=prompt)
     return result.output
 

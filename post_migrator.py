@@ -335,7 +335,8 @@ async def process_workflow():
                 blog_post=clean_text(markdown_body),
                 case_key=case_key,
                 needs_review=True,
-                q_and_a=tracked_opinion.q_and_a
+                q_and_a=tracked_opinion.q_and_a,
+                has_substance=tracked_opinion.has_substance
             )
 
             try:

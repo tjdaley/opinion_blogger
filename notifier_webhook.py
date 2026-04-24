@@ -8,10 +8,10 @@ ExecStart references `notifier_webhook:app` and stays stable across vendors.
 from util.settings import settings
 
 if settings.notification_vendor == "clicksend":
-    from clicksend_notifier_webhook import app
+    from notifiers.clicksend.clicksend_notifier_webhook import app
 elif settings.notification_vendor == "telegram":
-    from telegram_notifier_webhook import app
+    from notifiers.telegram.telegram_notifier_webhook import app
 else:
-    from twilio_notifier_webhook import app
+    from notifiers.twilio.twilio_notifier_webhook import app
 
 __all__ = ["app"]

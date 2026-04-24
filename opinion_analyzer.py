@@ -293,7 +293,7 @@ async def generate_blog_posts(max_concurrent: int = settings.max_concurrent_llm_
     :rtype: Tuple[str, int]
     """
     try:
-        records, _ = opinion_tracking_repo.select_many(condition={"status": "pending-blog"})  # type: ignore
+        records, _ = opinion_tracking_repo.select_many(condition={"status": "pending-blog", "has_substance": True})  # type: ignore
         records: List[OpinionTrackingInDB]
         logger.info("Found %d opinions pending blog generation", len(records))
         semaphore = asyncio.Semaphore(max_concurrent)

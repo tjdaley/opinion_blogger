@@ -5,9 +5,6 @@ import time
 
 from agents.opinion_tagger_agent import get_opinion_tagger_agent, user_prompt as tagger_prompt
 from db.connection import court_opinion_repo
-from db.supabasemanager import SupabaseManager
-
-supabase_manager = SupabaseManager()
 
 def extract_case_summary(blog_post: str) -> str:
     """
@@ -29,6 +26,7 @@ async def run_backfill(dry_run: bool = False, limit: Optional[int] = None):
     condition: dict[str, Any] = {
         "tags_top_k": "{}",
         "opinion_tracking.is_family_law": True,
+        "has_substance": True
     }
     selection = "*, opinion_tracking!inner(is_family_law)"
     if limit:

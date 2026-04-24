@@ -23,6 +23,7 @@ class CourtOpinion(BaseModel):
     tags_top_k: Optional[list[str]] = None
     tags_discarded: Optional[list[str]] = None
     tag_rationale: Optional[str] = None
+    has_substance: Optional[bool] = None
 
 
 class CourtOpinionInDB(CourtOpinion):
