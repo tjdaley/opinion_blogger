@@ -19,3 +19,5 @@ twilio
 clicksend-client
 fastapi
 uvicorn[standard]
+
+google-api-python-client

@@ -13,6 +13,7 @@ from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 
 import notifiers.telegram.telegram_notifier as telegram_notifier
 from db.connection import opinion_tracking_repo, court_opinion_repo
+from post_migrator import index_opinions_with_google
 from util.loggerfactory import LoggerFactory
 from util.settings import settings
 
@@ -58,19 +59,29 @@ async def _run_promote_to_branding():
     await process_workflow()
     telegram_notifier.send("Promote to branding migration completed.")
 
+async def _run_google_indexing():
+    """Background task: run the Google indexing."""
+    index_opinions_with_google()
+    telegram_notifier.send("Google indexing completed.")
+
 async def _approve_and_index():
     """Background task: approve all "needs_review" cases and re-index."""
+    phase = "starting"
     try:
-        records, _ = court_opinion_repo.select_many(condition={"needs_review": True})
+        phase = "retrieving cases needing review"
+        records, _ = court_opinion_repo.select_many(
+            condition={"needs_review": True, "has_substance": True}
+        )
+        phase = f"approving {len(records)} cases"
         for row in records:
             row.needs_review = False
             court_opinion_repo.update(row.id, row.model_dump(mode="json"))
+        phase = "indexing"
         telegram_notifier.send(f"Approved {len(records)} cases. Indexing started.")
-        await _run_promote_to_branding()  # Reuse the promote to branding workflow for indexing
-        telegram_notifier.send("Indexing completed after approval.")
+        await _run_google_indexing()
     except Exception as e:
-        logger.exception("approve_and_index failed")
-        telegram_notifier.send(f"approve_and_index error: {e}")
+        logger.exception("approve_and_index failed at phase: %s", phase)
+        telegram_notifier.send(f"approve_and_index error at phase {phase}: {e}")
 
 
 def _reply(text: str):
