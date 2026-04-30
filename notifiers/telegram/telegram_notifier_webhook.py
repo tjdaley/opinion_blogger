@@ -12,7 +12,7 @@ sendMessage call via telegram_notifier.send().
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 
 import notifiers.telegram.telegram_notifier as telegram_notifier
-from db.connection import opinion_tracking_repo
+from db.connection import opinion_tracking_repo, court_opinion_repo
 from util.loggerfactory import LoggerFactory
 from util.settings import settings
 
@@ -24,6 +24,8 @@ HELP_TEXT = (
     "Commands:\n"
     "  status\n"
     "  retry <case_number>\n"
+    "  promote\n"
+    "  approve\n"
     "  help"
 )
 
@@ -48,6 +50,27 @@ async def _run_retry(case_number: str):
     except Exception as e:
         logger.exception("retry failed for %s", case_number)
         telegram_notifier.send(f"retry {case_number} error: {e}")
+
+async def _run_promote_to_branding():
+    """Background task: run the promote to branding migration."""
+    from post_migrator import process_workflow
+    logger.info("Running promote to branding migration")
+    await process_workflow()
+    telegram_notifier.send("Promote to branding migration completed.")
+
+async def _approve_and_index():
+    """Background task: approve all "needs_review" cases and re-index."""
+    try:
+        records, _ = court_opinion_repo.select_many(condition={"needs_review": True})
+        for row in records:
+            row.needs_review = False
+            court_opinion_repo.update(row.id, row.model_dump(mode="json"))
+        telegram_notifier.send(f"Approved {len(records)} cases. Indexing started.")
+        await _run_promote_to_branding()  # Reuse the promote to branding workflow for indexing
+        telegram_notifier.send("Indexing completed after approval.")
+    except Exception as e:
+        logger.exception("approve_and_index failed")
+        telegram_notifier.send(f"approve_and_index error: {e}")
 
 
 def _reply(text: str):
@@ -74,6 +97,16 @@ async def _dispatch(body: str, background_tasks: BackgroundTasks):
             return
         _reply(f"Queued retry for {arg}. Will message when done.")
         background_tasks.add_task(_run_retry, arg)
+        return
+    
+    if cmd == "promote":
+        _reply("Queued promote to branding migration. Will message when done.")
+        background_tasks.add_task(_run_promote_to_branding)
+        return
+
+    if cmd == "approve":
+        _reply("Queued approve and index task. Will message when done.")
+        background_tasks.add_task(_approve_and_index)
         return
 
     if cmd in ("help", "start"):
