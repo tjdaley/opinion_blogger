@@ -47,8 +47,8 @@ async def _classify_one(row: OpinionTrackingInDB, semaphore: asyncio.Semaphore) 
             row.case_name = analysis.case_name
         if analysis.lower_court_name:
             row.lower_court_name = analysis.lower_court_name
-        row.seo_title = analysis.seo_title
-        row.seo_focus_kw = analysis.seo_focuskw
+        row.seo_title = None  # SEO title will be generated later in the pipeline, so we clear it here in case it was populated by a previous run
+        row.seo_focus_kw = analysis.seo_focus_kw
         row.meta_description = analysis.meta_description
         row.has_substance = analysis.has_substance
         if not row.has_substance:

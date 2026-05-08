@@ -3,8 +3,7 @@ from datetime import datetime
 import json
 import os
 from typing import List, Union
-import requests
-from core import get_pdf_text, opinion_text, OPINION_LOCAL_PATH, POSTS_LOCAL_PATH
+from core import get_pdf_text, opinion_text, OPINION_LOCAL_PATH, POSTS_LOCAL_PATH, BROWSER_HEADERS, http
 from agents.q_and_a_agent import get_q_and_a_agent, user_prompt as q_and_a_user_prompt, QandA
 from agents.blog_post_agent import get_blog_post_agent, user_prompt as blog_post_user_prompt
 from agents.case_name_agent import get_case_name_agent, user_prompt as case_name_user_prompt
@@ -13,7 +12,7 @@ from db.connection import opinion_tracking_repo, court_opinion_repo
 from util.loggerfactory import LoggerFactory
 from util.settings import settings
 
-logger = LoggerFactory.create_logger(__name__)
+logger = LoggerFactory.create_logger(__name__, loglevel="DEBUG")
 
 def opinion_text_from_court_opinion(case_key: str, page_limit: int = 15) -> Union[str, None]:
     """
@@ -86,27 +85,32 @@ async def correct_case_name_for_opinions():
             opinion_tracking_repo.update(tracked_opinion.id, tracked_opinion.model_dump(mode="json"))
     logger.info("Completed case name correction for tracked opinions.")
 
-async def download_opinion_pdf(opinion: OpinionTrackingInDB) -> Union[str, None]:
+async def get_opinion_pdf_path(opinion: OpinionTrackingInDB) -> Union[str, None]:
     """
-    Downloads the opinion PDF to local storage for AI analysis.
-    Returns the local file path or None if download failed.
+    Returns the local path to the opinion PDF, downloading it from the web only
+    if it isn't already cached at OPINION_LOCAL_PATH/<case_number>.pdf.
 
     :param opinion: The OpinionTrackingInDB entry containing case information
-    :return: The local file path of the downloaded PDF or None if download failed
+    :return: The local file path of the PDF or None if it could not be obtained
     """
+    local_path = os.path.join(OPINION_LOCAL_PATH, f"{opinion.case_number}.pdf")
+    if os.path.exists(local_path) and os.path.getsize(local_path) > 0:
+        logger.info("Using cached PDF for case %s at %s", opinion.case_number, local_path)
+        return local_path
+
     if not opinion.opinion_link:
         logger.warning("No opinion link for case %s, cannot download PDF.", opinion.case_number)
         return None
     try:
-        response = requests.get(opinion.opinion_link)
+        response = http.get(opinion.opinion_link, headers=BROWSER_HEADERS, timeout=30)
         response.raise_for_status()
-        local_path = os.path.join(OPINION_LOCAL_PATH, f"{opinion.case_number}.pdf")
         with open(local_path, 'wb') as f:
             f.write(response.content)
         logger.info("Downloaded PDF for case %s to %s", opinion.case_number, local_path)
         return local_path
     except Exception as e:
         logger.error("Error downloading PDF for case %s: %s", opinion.case_number, e)
+        logger.exception(e)
         return None
 
 async def _process_single_q_and_a(opinion: OpinionTrackingInDB, semaphore: asyncio.Semaphore):
@@ -114,11 +118,17 @@ async def _process_single_q_and_a(opinion: OpinionTrackingInDB, semaphore: async
     async with semaphore:
         logger.info("Generating Q&A for case %s: %s", opinion.case_number, opinion.case_name)
         text = opinion_text(opinion, page_limit=15)
+
         if not text:
             logger.info("No opinion text found for case %s, attempting to download PDF.", opinion.id)
-            local_path = await download_opinion_pdf(opinion)
+            local_path = await get_opinion_pdf_path(opinion)
             if local_path:
                 text = get_pdf_text(local_path, page_limit=15)
+                if text:
+                    logger.debug("Added opinion text from PDF to database for case %s", opinion.case_number)
+                    opinion.opinion_text = text  # Cache the text in the database for future use
+                    opinion_tracking_repo.update(opinion.id, opinion.model_dump(mode="json"))
+
         if not text:
             logger.warning("No opinion text available for case %s, skipping Q&A generation.", opinion.id)
             return
@@ -126,7 +136,9 @@ async def _process_single_q_and_a(opinion: OpinionTrackingInDB, semaphore: async
             q_and_a = await generate_q_and_a(opinion, text)
         except Exception as e:
             logger.error("Error generating Q&A for case %s: %s. Skipping.", opinion.case_number, e)
+            logger.exception(e)
             return
+
         if q_and_a:
             logger.info("Generated Q&A for case %s, updating database record.", opinion.case_number)
             opinion.q_and_a = q_and_a
@@ -134,6 +146,7 @@ async def _process_single_q_and_a(opinion: OpinionTrackingInDB, semaphore: async
                 opinion_tracking_repo.update(opinion.id, opinion.model_dump(mode="json"))
             except Exception as e:
                 logger.error("Error updating DB for case %s: %s. Skipping.", opinion.case_number, e)
+                logger.exception(e)
 
 async def correct_q_and_a_for_opinions(max_concurrent: int = settings.max_concurrent_llm_calls):
     """

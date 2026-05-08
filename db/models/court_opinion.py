@@ -24,6 +24,9 @@ class CourtOpinion(BaseModel):
     tags_discarded: Optional[list[str]] = None
     tag_rationale: Optional[str] = None
     has_substance: Optional[bool] = None
+    seo_title: Optional[str] = None
+    seo_focus_kw: Optional[str] = None
+    meta_description: Optional[str] = None
 
 
 class CourtOpinionInDB(CourtOpinion):

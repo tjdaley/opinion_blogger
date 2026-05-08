@@ -1,0 +1,3 @@
+<case_information>
+{json_string}
+</case_information>

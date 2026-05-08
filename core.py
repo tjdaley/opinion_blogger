@@ -9,7 +9,8 @@ from util.settings import settings
 from db.models.opinion_tracking import OpinionTrackingInDB
 from db.connection import opinion_tracking_repo
 from agents.family_angle_agent import get_family_angle_agent, user_prompt as family_angle_user_prompt, FamilyAngle
-from agents.case_analysis_agent import get_case_analysis_agent, user_prompt as case_analysis_user_prompt, CaseAnalysis
+from agents.case_analysis_agent import get_case_analysis_agent, user_prompt as case_analysis_user_prompt, CaseAnalysis, CaseLegalAnalysis
+from agents.case_info_extraction_agent import get_case_info_extraction_agent, user_prompt as case_info_extraction_user_prompt, CaseInfo
 from util.loggerfactory import LoggerFactory
 
 logger = LoggerFactory.create_logger(__name__)
@@ -94,9 +95,27 @@ async def analyze_with_full_text(case_name: str, full_text: str) -> CaseAnalysis
     Returns:
         Instance of CaseAnalysis
     """
+    # Extract simple fields with the case info extraction agent first
+    info_prompt = case_info_extraction_user_prompt.format(opinion_text=full_text)
+    info_result = await get_case_info_extraction_agent().run(user_prompt=info_prompt)
+    case_info: CaseInfo = info_result.output
+
     prompt = case_analysis_user_prompt.format(opinion_text=full_text)
     result = await get_case_analysis_agent().run(user_prompt=prompt)
-    return result.output
+    legal_analysis: CaseLegalAnalysis = result.output
+
+    return CaseAnalysis(
+        family_law=case_info.family_law,
+        headline=legal_analysis.headline,
+        legal_issue=legal_analysis.legal_issue,
+        holding=legal_analysis.holding,
+        case_name=case_info.case_name,
+        lower_court_name=case_info.lower_court_name,
+        seo_title="",
+        seo_focus_kw=legal_analysis.seo_focus_kw,
+        meta_description=legal_analysis.meta_description,
+        has_substance=case_info.has_substance
+    )
 
 def opinion_text(row: OpinionTrackingInDB, page_limit: int = 5) -> str:
     """

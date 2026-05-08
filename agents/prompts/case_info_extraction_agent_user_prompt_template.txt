@@ -1,0 +1,5 @@
+<case>
+   <opinion_text>
+     {opinion_text}
+   </opinion_text>
+</case>

@@ -336,7 +336,10 @@ async def process_workflow():
                 case_key=case_key,
                 needs_review=True,
                 q_and_a=tracked_opinion.q_and_a,
-                has_substance=tracked_opinion.has_substance
+                has_substance=tracked_opinion.has_substance,
+                seo_title=tracked_opinion.seo_title,
+                seo_focus_kw=tracked_opinion.seo_focus_kw,
+                meta_description=tracked_opinion.meta_description
             )
 
             try:

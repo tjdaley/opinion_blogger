@@ -11,14 +11,21 @@ class CaseAnalysis(BaseModel):
     case_name: str
     lower_court_name: str
     seo_title: str
-    seo_focuskw: str
+    seo_focus_kw: str
     meta_description: str
     has_substance: bool
 
-# Lazy singleton pattern to avoid event loop issues
-_case_analysis_agent: Agent[None, CaseAnalysis] | None = None
+class CaseLegalAnalysis(BaseModel):
+    headline: str
+    legal_issue: str
+    holding: str
+    seo_focus_kw: str
+    meta_description: str
 
-def get_case_analysis_agent() -> Agent[None, CaseAnalysis]:
+# Lazy singleton pattern to avoid event loop issues
+_case_analysis_agent: Agent[None, CaseLegalAnalysis] | None = None
+
+def get_case_analysis_agent() -> Agent[None, CaseLegalAnalysis]:
     """
     Get or create the case analysis agent instance.
     Uses lazy initialization to ensure it's created within an async context.
@@ -27,7 +34,7 @@ def get_case_analysis_agent() -> Agent[None, CaseAnalysis]:
     if _case_analysis_agent is None:
         _case_analysis_agent = Agent(
             model=configure_model(mode="chat", no_safety=True),
-            output_type=CaseAnalysis,
+            output_type=CaseLegalAnalysis,
             system_prompt=get_prompt("case_analysis_agent_system_prompt"),
             name="CaseAnalysisAgent",
         )

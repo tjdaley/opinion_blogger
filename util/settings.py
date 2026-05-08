@@ -83,6 +83,10 @@ class Settings(BaseSettings):
     llm_strategy_top_p: float = 0.8
     llm_embedding_batch_size: int = 100
 
+    # For SEO Title Agent
+    seo_title_vendor: str = "deepseek"  # Vendor for SEO title generation
+    seo_title_model: str = "deepseek-chat"  # Model for SEO title generation
+
     # LLM settings
     gemini_api_key: str = ""
     gemini_model: str = "gemini-3-flash-preview"
@@ -111,6 +115,7 @@ class Settings(BaseSettings):
     deepseek_model: str = "deepseek-reasoner"
     deepseek_fast_model: str = "deepseek-chat"
     deepseek_base_url: str = "https://api.deepseekr.com/v1/"
+    deepseek_chat_temperature: float = 0.7
 
     # Database Settings
     supabase_url: str = ""

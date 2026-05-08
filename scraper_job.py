@@ -96,12 +96,19 @@ def cmd_tag_opinions():
     logger.info("Running opinion tagger")
     asyncio.run(run_backfill(dry_run=True, limit=10))
 
+async def cmd_seo_titles():
+    """Backfill SEO titles for all CourtOpinions whose seo_title is NULL."""
+    from seo_title_generator import backfill_seo_titles
+    logger.info("Running SEO title backfill")
+    await backfill_seo_titles()
+
 async def cmd_all():
     """Run the full pipeline: scrape -> classify -> analyze -> upload -> promote."""
     try:
         await cmd_scrape("all")
         await cmd_classify()
         await cmd_analyze()
+        await cmd_seo_titles()
         cmd_upload()
         await cmd_promote_to_branding()
     except Exception:
@@ -151,6 +158,7 @@ def main():
     # Promote to Branding
     subparsers.add_parser("promote-to-branding", help="Run promote to branding migration")
     subparsers.add_parser("tag-opinions", help="Run opinion tagger to add tags to opinions based on their content")
+    subparsers.add_parser("seo-titles", help="Backfill SEO titles for CourtOpinions whose seo_title is NULL")
 
     args = parser.parse_args()
 
@@ -192,6 +200,8 @@ def main():
         cmd_trash_empty_posts()
     elif command == "tag-opinions":
         cmd_tag_opinions()
+    elif command == "seo-titles":
+        asyncio.run(cmd_seo_titles())
     else:
         logger.error("Unknown command: %s", command)
 
