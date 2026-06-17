@@ -220,14 +220,35 @@ async def generate_blog_post(case_data: OpinionTrackingInDB, opinion_text: str) 
 
     if not case_data.is_family_law:
         additional_instruction = """
-    9. CROSSOVER
-       (a) Fixed Header Text: "Family Law Crossover"
-       (b) Content: Explain how this civil ruling can be weaponized in a Texas divorce or custody case?
-       (c) Content Style: Paragraph
-       (d) Header Style: H2
+9. CROSSOVER
+(a) Fixed Header Text: "Family Law Crossover"
+(b) Content: Explain the procedural mechanism or rule this ruling establishes and
+    how it could arise in a Texas family law matter. Describe the rule and the
+    procedure, not the character, motive, or litigation conduct of any party. Do
+    NOT state or imply that any party acted in bad faith, was harassing, vexatious,
+    serial, or abusive, or had improper motives, UNLESS the opinion itself makes
+    that specific finding -- in which case attribute it to the court
+    ("the court found ...").
+(c) Content Style: Paragraph
+(d) Header Style: H2
 """
     else:
         additional_instruction = ""
+
+    # Party-naming policy: de-identify family-law parties; allow names in civil/crossover.
+    if case_data.is_family_law:
+        party_naming_instruction = (
+            "This is a FAMILY LAW matter. Refer to the parties ONLY by role "
+            "(Husband/Wife, Mother/Father, Petitioner/Respondent) or by initials. "
+            "Do NOT use any party's full personal name anywhere in the post, even "
+            "though it appears in the public opinion. Names of entities, judges, and "
+            "courts are fine."
+        )
+    else:
+        party_naming_instruction = (
+            "This is a CIVIL / CROSSOVER matter. You may use party names as they "
+            "appear in the public opinion."
+        )
 
     prompt = blog_post_user_prompt.format(
         case_number=case_data.case_number,
@@ -239,7 +260,8 @@ async def generate_blog_post(case_data: OpinionTrackingInDB, opinion_text: str) 
         opinion_date=opinion_date,
         lower_court_name=case_data.lower_court_name,
         opinion_link=case_data.opinion_link,
-        additional_instruction=additional_instruction
+        additional_instruction=additional_instruction,
+        party_naming_instruction=party_naming_instruction,
     )
 
     try:
