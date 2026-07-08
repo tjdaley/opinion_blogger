@@ -47,6 +47,41 @@ def get_tag_id(tag_slug: str) -> Union[int, None]:
         return tags[0]['id']
     return None
 
+def count_posts_by_status(status: str, per_page: int = 100) -> int:
+    """
+    Return the count of WordPress Blog posts in the given status.
+    
+    Args:
+        status: The WordPress Blog post status to count.
+
+    Returns:
+        The number of posts in the given status.
+    """
+    total: int = 0  # Accumulate the total number of posts across all pages.
+    page: int = 1   # Track the current page of results when paginating.
+
+    try:
+        while True:
+            params: dict[str, Union[str, int]] = {"status": status, "per_page": per_page} 
+            resp = requests.get(f"{WP_URL}/posts", params=params, auth=(WP_USER, WP_APP_PASSWORD))
+            if resp.status_code == 200:
+                total += int(resp.headers.get("X-WP-Total", 0))
+                total_pages = int(resp.headers.get('X-WP-TotalPages', 1))
+                if page >= total_pages:
+                    break
+                page += 1
+            elif resp.status_code == 429:
+                logger.warning("Rate limited when counting posts by status %s, retrying...", status)
+                time.sleep(random.uniform(1, 3))
+                continue
+            else:
+                logger.error("Failed to get blog post counts for %s: %s", status, resp.text)
+                break
+        return total
+    except Exception as e:
+        logger.error("Failed to get blog post counts for %s: %s", status, e)
+        return 0
+
 def get_posts_to_process(tag_slug: str, status: str = 'publish', per_page: int = 100) -> List[dict[str, str]]:
     """
     Fetch all posts with specific tag and status, paginating through all pages.
@@ -251,7 +286,32 @@ async def delete_empty_opinions():
 
     logger.info("Completed checking for empty opinions.")
 
+def revert_unreviewed_published_posts() -> int:
+    """
+    Backstop for the editor/commentary site: any post that is live (status=publish)
+    but still carries the review tag (i.e. was never cleared) is reverted to
+    'pending'. Catches the absent-minded-Publish case. Returns count reverted.
+    """
+    review_posts = get_posts_to_process(settings.wp_review_tag, status='publish')
+    reverted = 0
+    for post in review_posts:
+        logger.warning(
+            "Reverting published-but-unreviewed post %s back to pending.", post.get('id')
+        )
+        resp = requests.post(
+            f"{WP_URL}/posts/{post['id']}",
+            json={'status': 'pending'},
+            auth=(WP_USER, WP_APP_PASSWORD),
+        )
+        if resp.status_code in (200, 201):
+            reverted += 1
+        else:
+            logger.error("Failed to revert post %s: %s", post.get('id'), resp.text)
+    logger.info("Revert-loop: reverted %d unreviewed published post(s).", reverted)
+    return reverted
+
 async def process_workflow():
+    revert_unreviewed_published_posts()
     categories_in_db: List[LegalSubjectInDB]
     categories_in_db, _ = legal_subject_repo.select_many({})  # type: ignore
     defined_categories = [cat.id for cat in categories_in_db]
@@ -262,6 +322,8 @@ async def process_workflow():
     tag_id_to_mark_error = get_tag_id(tag_to_mark_error)
     tag_to_mark_success = settings.wp_success_tag
     tag_id_to_mark_success = get_tag_id(tag_to_mark_success)
+    tag_to_review = settings.wp_review_tag
+    tag_id_review = get_tag_id(tag_to_review)
     posts = get_posts_to_process(tag_to_publish)
 
     def _tag_migration_error(post: dict[str, str]):
@@ -280,6 +342,9 @@ async def process_workflow():
             current_tags: list[int] = post['tags']  # type: ignore
             if tag_id_to_mark_error and tag_id_to_mark_error in current_tags:
                 logger.info("Skipping post %s due to prior error tag.", post.get('id'))
+                continue
+            if tag_id_review and tag_id_review in current_tags:
+                logger.info("Skipping post %s: still flagged for human review.", post.get('id'))
                 continue
 
             logger.info("Processing post %s", post.get('id'))

@@ -9,6 +9,7 @@ Failures never raise — they log and return False.
 """
 import requests
 
+import post_migrator
 from util.loggerfactory import LoggerFactory
 from util.settings import settings
 
@@ -42,7 +43,6 @@ def send(message: str) -> bool:
         logger.error("Failed to send Telegram message: %s", e)
         return False
 
-
 def status_summary() -> str:
     """Return a short string with current opinion_tracking counts by status."""
     from db.connection import opinion_tracking_repo
@@ -60,4 +60,7 @@ def status_summary() -> str:
         except Exception as e:
             logger.error("status_summary: failed counting %s: %s", s, e)
             parts.append(f"{s}=?")
+
+    draft_count = post_migrator.count_posts_by_status("draft")
+    parts.append(f"blog draft={draft_count or 0}")
     return " ".join(parts)
