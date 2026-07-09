@@ -23,10 +23,12 @@ app = FastAPI(title="Opinion Blogger Webhook (Telegram)")
 
 HELP_TEXT = (
     "Commands:\n"
+    "  id\n"
     "  status\n"
     "  retry <case_number>\n"
     "  promote\n"
     "  approve\n"
+    "  all\n"
     "  help"
 )
 
@@ -58,6 +60,17 @@ async def _run_promote_to_branding():
     logger.info("Running promote to branding migration")
     await process_workflow()
     telegram_notifier.send("Promote to branding migration completed.")
+
+async def _run_all_tasks():
+    """Background task: run all tasks in sequence."""
+    from scraper_job import cmd_all
+    try:
+        await cmd_all()
+        telegram_notifier.send("All tasks completed.")
+        telegram_notifier.send(telegram_notifier.status_summary())
+    except Exception as e:
+        logger.exception("All tasks failed")
+        telegram_notifier.send(f"All tasks error: {e}")
 
 async def _run_google_indexing():
     """Background task: run the Google indexing."""
@@ -122,6 +135,11 @@ async def _dispatch(body: str, background_tasks: BackgroundTasks):
     if cmd == "approve":
         _reply("Queued approve and index task. Will message when done.")
         background_tasks.add_task(_approve_and_index)
+        return
+    
+    if cmd == "all":
+        _reply("Queued all tasks. Will message when done.")
+        background_tasks.add_task(_run_all_tasks)
         return
 
     if cmd in ("help", "start"):
