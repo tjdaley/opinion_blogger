@@ -2,7 +2,7 @@
 opinion_tracking.py - Scratch table used to track opinions from scraping through blog posting
 """
 import datetime
-from typing import List, Optional, Dict
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, ConfigDict
 
 class QandA(BaseModel):
@@ -30,8 +30,8 @@ class OpinionTracking(BaseModel):
     q_and_a: Optional[List[QandA]] = None
     opinion_text: Optional[str] = None
     has_substance: Optional[bool] = None
-    gate_passed: bool = False
-    gate_flags: Optional[Dict[str, str]] = None
+    gate_passed: Optional[bool] = None
+    gate_flags: Optional[List[Dict[str, Any]]] = None
     gate_report_html: Optional[str] = None
 
 class OpinionTrackingInDB(OpinionTracking):
