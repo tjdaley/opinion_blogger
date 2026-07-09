@@ -116,7 +116,7 @@ async def cmd_all():
         logger.exception("Pipeline run failed")
         raise
 
-    notifier.send(f"Pipeline done. {notifier.status_summary()}")
+    notifier.reply(f"Pipeline done. {notifier.status_summary()}")
 
 
 def main():

@@ -67,6 +67,8 @@ async def _run_retry(case_number: str):
         logger.exception("retry failed for %s", case_number)
         clicksend_notifier.send(f"retry {case_number} error: {e}")
 
+def reply(text: str):
+    _reply(text)
 
 def _reply(text: str):
     """ClickSend has no inline reply — send the response as an outbound SMS."""

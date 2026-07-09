@@ -38,7 +38,7 @@ async def _run_retry(case_number: str):
     try:
         row = opinion_tracking_repo.select_one(condition={"case_number": case_number})
         if not row:
-            telegram_notifier.send(f"retry {case_number}: case not found")
+            _reply(f"retry {case_number}: case not found")
             return
 
         row.status = "pending-analysis"
@@ -49,33 +49,31 @@ async def _run_retry(case_number: str):
 
         updated = opinion_tracking_repo.select_one(condition={"case_number": case_number})
         new_status = updated.status if updated else "missing"
-        telegram_notifier.send(f"retry {case_number} -> {new_status}")
+        _reply(f"retry {case_number} -> {new_status}")
     except Exception as e:
         logger.exception("retry failed for %s", case_number)
-        telegram_notifier.send(f"retry {case_number} error: {e}")
+        _reply(f"retry {case_number} error: {e}")
 
 async def _run_promote_to_branding():
     """Background task: run the promote to branding migration."""
     from post_migrator import process_workflow
     logger.info("Running promote to branding migration")
     await process_workflow()
-    telegram_notifier.send("Promote to branding migration completed.")
+    _reply("Promote to branding migration completed.")
 
 async def _run_all_tasks():
     """Background task: run all tasks in sequence."""
     from scraper_job import cmd_all
     try:
         await cmd_all()
-        telegram_notifier.send("All tasks completed.")
-        telegram_notifier.send(telegram_notifier.status_summary())
     except Exception as e:
         logger.exception("All tasks failed")
-        telegram_notifier.send(f"All tasks error: {e}")
+        _reply(f"All tasks error: {e}")
 
 async def _run_google_indexing():
     """Background task: run the Google indexing."""
     index_opinions_with_google()
-    telegram_notifier.send("Google indexing completed.")
+    _reply("Google indexing completed.")
 
 async def _approve_and_index():
     """Background task: approve all "needs_review" cases and re-index."""
@@ -90,12 +88,14 @@ async def _approve_and_index():
             row.needs_review = False
             court_opinion_repo.update(row.id, row.model_dump(mode="json"))
         phase = "indexing"
-        telegram_notifier.send(f"Approved {len(records)} cases. Indexing started.")
+        _reply(f"Approved {len(records)} cases. Indexing started.")
         await _run_google_indexing()
     except Exception as e:
         logger.exception("approve_and_index failed at phase: %s", phase)
-        telegram_notifier.send(f"approve_and_index error at phase {phase}: {e}")
+        _reply(f"approve_and_index error at phase {phase}: {e}")
 
+def reply(text: str):
+    _reply(text)
 
 def _reply(text: str):
     """Telegram has no inline reply on the webhook — send as an outbound message."""
