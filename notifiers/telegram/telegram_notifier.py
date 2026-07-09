@@ -59,7 +59,7 @@ def status_summary() -> str:
             parts.append(f"{s}={count or 0}")
         except Exception as e:
             logger.error("status_summary: failed counting %s: %s", s, e)
-            parts.append(f"{s}=?")
+            parts.append(f"{s}={str(e)}")
 
     draft_count = post_migrator.count_posts_by_status("draft")
     parts.append(f"blog draft={draft_count or 0}")

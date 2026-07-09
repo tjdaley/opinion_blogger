@@ -86,7 +86,7 @@ async def _approve_and_index():
 
 def _reply(text: str):
     """Telegram has no inline reply on the webhook — send as an outbound message."""
-    telegram_notifier.send(text)
+    telegram_notifier.send(f"{settings.id}: {text}")
 
 
 async def _dispatch(body: str, background_tasks: BackgroundTasks):
@@ -97,6 +97,10 @@ async def _dispatch(body: str, background_tasks: BackgroundTasks):
 
     cmd = parts[0].lstrip("/").lower()  # allow either "status" or "/status"
     arg = parts[1].strip() if len(parts) > 1 else ""
+
+    if cmd == "id":
+        _reply(f"ID: {settings.id}, Version: {settings.version}")
+        return
 
     if cmd == "status":
         _reply(telegram_notifier.status_summary())

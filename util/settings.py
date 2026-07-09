@@ -7,6 +7,10 @@ from typing import Optional
 from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
+    # Server name (human meaning)
+    id: str = ""
+    version: str = ""
+
     # Local File Cache
     opinion_local_path: str = "./scotx"
     posts_local_path: str = "./draft_posts"
@@ -53,6 +57,7 @@ class Settings(BaseSettings):
     wp_post_tag: str = "ok_to_publish"
     wp_error_tag: str = "publication_failed"
     wp_success_tag: str = "published_to_landing_pages"
+    wp_review_tag: str = "needs-human-review"
 
     # SCOTXBLOG Settings
     table_element_id: str = "stagingDateTable"
@@ -86,6 +91,10 @@ class Settings(BaseSettings):
     # For SEO Title Agent
     seo_title_vendor: str = "deepseek"  # Vendor for SEO title generation
     seo_title_model: str = "deepseek-chat"  # Model for SEO title generation
+
+    # For Verifier Agent
+    verifier_vendor: str = "anthropic"
+    verifier_model: str = "claude-opus-4-8"
 
     # LLM settings
     gemini_api_key: str = ""
