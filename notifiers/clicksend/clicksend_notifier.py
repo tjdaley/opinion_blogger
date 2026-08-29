@@ -32,6 +32,12 @@ def _get_api() -> Optional[clicksend_client.SMSApi]:
     return _api
 
 
+def reply(message: str) -> bool:
+    """Send an operator-facing SMS. Present so the vendor modules stay
+    plug-compatible with telegram_notifier, which prefixes the instance id."""
+    return send(message)
+
+
 def send(message: str) -> bool:
     """Send an SMS to the operator. Never raises."""
     if not (settings.clicksend_phone_number and settings.operator_phone_number):

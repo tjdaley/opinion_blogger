@@ -119,7 +119,10 @@ async def analyze_with_full_text(case_name: str, full_text: str) -> CaseAnalysis
 
 def opinion_text(row: OpinionTrackingInDB, page_limit: int = 5) -> str:
     """
-    Retrieves the opinion text for a given case row.
+    Retrieves the opinion text for a given case row. Tries to read from local PDF first;
+    if not available, tries to find the opinion text in the database. If neither is available,
+    returns an empty string.
+
     Arguments:
         row -- An instance of OpinionTrackingInDB representing a case
         page_limit -- maximum number of pages to read (default 5 for scraping, use 15 for blog generation)
@@ -128,6 +131,10 @@ def opinion_text(row: OpinionTrackingInDB, page_limit: int = 5) -> str:
     """
     pdf_path = os.path.join(OPINION_LOCAL_PATH, f"{row.case_number}.pdf")
     _text = get_pdf_text(pdf_path, page_limit=page_limit) if os.path.exists(pdf_path) else ""
+
+    if not _text and row.opinion_text:
+        _text = row.opinion_text
+
     return _text
 
 async def review_non_family_cases():

@@ -26,6 +26,7 @@ HELP_TEXT = (
     "  id\n"
     "  status\n"
     "  retry <case_number>\n"
+    "  upload\n"
     "  promote\n"
     "  approve\n"
     "  all\n"
@@ -53,6 +54,29 @@ async def _run_retry(case_number: str):
     except Exception as e:
         logger.exception("retry failed for %s", case_number)
         _reply(f"retry {case_number} error: {e}")
+
+async def _run_upload():
+    """Background task: re-run only the WordPress uploader.
+
+    The uploader is idempotent by construction: it reads rows still sitting at
+    status=pending-blog and only advances a row to blog-drafted after WordPress
+    returns 201. So a run that died mid-flight (network/DNS) can simply be
+    repeated without touching the DB and without re-spending LLM calls.
+    """
+    from scraper_job import cmd_upload
+    try:
+        before, _ = opinion_tracking_repo.select_many(condition={"status": "pending-blog"})  # type: ignore
+        pending = len(before)
+        if not pending:
+            _reply("upload: nothing at pending-blog.")
+            return
+        cmd_upload()
+        after, _ = opinion_tracking_repo.select_many(condition={"status": "pending-blog"})  # type: ignore
+        remaining = len(after)
+        _reply(f"upload: {pending - remaining} of {pending} posted, {remaining} still pending-blog.")
+    except Exception as e:
+        logger.exception("upload failed")
+        _reply(f"upload error: {e}")
 
 async def _run_promote_to_branding():
     """Background task: run the promote to branding migration."""
@@ -94,12 +118,9 @@ async def _approve_and_index():
         logger.exception("approve_and_index failed at phase: %s", phase)
         _reply(f"approve_and_index error at phase {phase}: {e}")
 
-def reply(text: str):
-    _reply(text)
-
 def _reply(text: str):
     """Telegram has no inline reply on the webhook — send as an outbound message."""
-    telegram_notifier.send(f"{settings.id}: {text}")
+    telegram_notifier.reply(text)
 
 
 async def _dispatch(body: str, background_tasks: BackgroundTasks):
@@ -127,6 +148,11 @@ async def _dispatch(body: str, background_tasks: BackgroundTasks):
         background_tasks.add_task(_run_retry, arg)
         return
     
+    if cmd == "upload":
+        _reply("Queued WordPress upload. Will message when done.")
+        background_tasks.add_task(_run_upload)
+        return
+
     if cmd == "promote":
         _reply("Queued promote to branding migration. Will message when done.")
         background_tasks.add_task(_run_promote_to_branding)

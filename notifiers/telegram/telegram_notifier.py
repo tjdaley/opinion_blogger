@@ -43,6 +43,15 @@ def send(message: str) -> bool:
         logger.error("Failed to send Telegram message: %s", e)
         return False
 
+def reply(text: str) -> bool:
+    """Send an operator-facing message tagged with this instance's id.
+
+    Lives here rather than in the webhook module so batch entry points
+    (scraper_job) can reach it without importing the FastAPI app.
+    """
+    return send(f"{settings.id}: {text}")
+
+
 def status_summary() -> str:
     """Return a short string with current opinion_tracking counts by status."""
     from db.connection import opinion_tracking_repo
