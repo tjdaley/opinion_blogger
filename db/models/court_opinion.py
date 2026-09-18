@@ -1,5 +1,5 @@
 import datetime
-from typing import Optional
+from typing import Any, Optional
 from pydantic import BaseModel, ConfigDict
 from db.models.opinion_tracking import QandA
 
@@ -27,6 +27,11 @@ class CourtOpinion(BaseModel):
     seo_title: Optional[str] = None
     seo_focus_kw: Optional[str] = None
     meta_description: Optional[str] = None
+    # Instagram carousel (db/migrations/001_instagram_columns.sql)
+    instagram_media_id: Optional[str] = None
+    instagram_permalink: Optional[str] = None
+    instagram_content: Optional[dict[str, Any]] = None
+    instagram_published_at: Optional[datetime.datetime] = None
 
 
 class CourtOpinionInDB(CourtOpinion):

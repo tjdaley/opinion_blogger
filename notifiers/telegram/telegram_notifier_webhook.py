@@ -27,6 +27,7 @@ HELP_TEXT = (
     "  status\n"
     "  retry <case_number>\n"
     "  upload\n"
+    "  instagram [dry]\n"
     "  promote\n"
     "  approve\n"
     "  all\n"
@@ -77,6 +78,16 @@ async def _run_upload():
     except Exception as e:
         logger.exception("upload failed")
         _reply(f"upload error: {e}")
+
+async def _run_instagram(dry_run: bool):
+    """Background task: publish (or list) WordPress posts tagged for Instagram."""
+    from instagram.publisher import publish_pending
+    try:
+        report = await publish_pending(dry_run=dry_run)
+        _reply(("[dry run] " if dry_run else "") + report.summary())
+    except Exception as e:
+        logger.exception("instagram failed")
+        _reply(f"instagram error: {e}")
 
 async def _run_promote_to_branding():
     """Background task: run the promote to branding migration."""
@@ -151,6 +162,12 @@ async def _dispatch(body: str, background_tasks: BackgroundTasks):
     if cmd == "upload":
         _reply("Queued WordPress upload. Will message when done.")
         background_tasks.add_task(_run_upload)
+        return
+
+    if cmd == "instagram":
+        dry_run = arg.lower() in ("dry", "dry-run", "list")
+        _reply(f"Queued Instagram {'dry run' if dry_run else 'publish'}. Will message when done.")
+        background_tasks.add_task(_run_instagram, dry_run)
         return
 
     if cmd == "promote":

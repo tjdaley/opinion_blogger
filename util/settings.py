@@ -59,6 +59,25 @@ class Settings(BaseSettings):
     wp_success_tag: str = "published_to_landing_pages"
     wp_review_tag: str = "needs-human-review"
 
+    # Instagram
+    instagram_firm_name: str = "KoonsFuller Family Law"  # shown on carousel slides
+    instagram_access_token: str = ""
+    instagram_app_secret: str = ""
+    instagram_app_id: str = ""
+    instagram_app_name: str = ""
+    instagram_user_name: str = ""
+    instagram_user_id: str = ""
+    instagram_agent_vendor: str = ""  # blank = llm_vendor
+    instagram_agent_model: str = ""   # blank = that vendor's default model
+    instagram_graph_url: str = "https://graph.instagram.com/v25.0"
+    instagram_ok_tag: str = "ok_for_instagram"          # WP tag: approved to post
+    instagram_done_tag: str = "published_to_instagram"  # WP tag: posted
+    instagram_failed_tag: str = "instagram_failed"      # WP tag: needs a human
+    instagram_ok_category: str = "instagram"
+    instagram_bucket: str = "instagram-media"           # public Supabase Storage bucket
+    instagram_max_posts_per_run: int = 1                # spread posts out across runs
+    instagram_token_file: str = "instagram_token.json"  # refreshed token is persisted here
+
     # SCOTXBLOG Settings
     table_element_id: str = "stagingDateTable"
     scotx_url: str = "https://data.scotxblog.com/scotx/staging/decided"

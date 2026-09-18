@@ -11,6 +11,8 @@ Usage:
     python scraper_job.py analyze          # Run opinion analyzer / blog generator
     python scraper_job.py upload           # Run WordPress uploader
     python scraper_job.py repair           # Run repair functions
+    python scraper_job.py instagram [--dry-run]  # Publish tagged posts to Instagram
+    python scraper_job.py instagram-preview [content.json | case_key]  # Render IG carousel locally
 """
 
 import argparse
@@ -102,6 +104,46 @@ async def cmd_seo_titles():
     logger.info("Running SEO title backfill")
     await backfill_seo_titles()
 
+async def cmd_instagram_preview(source: str):
+    """Render a carousel locally, without posting.
+
+    `source` is either a content JSON file, or a court_opinion case_key - in
+    which case the Instagram agent writes the content from the approved post.
+    """
+    import json
+    from pathlib import Path
+    from instagram.models import CarouselContent
+    from instagram.renderer import render_slides
+    src = Path(source)
+    if src.suffix == ".json":
+        content = CarouselContent.model_validate(json.loads(src.read_text(encoding="utf-8")))
+        # A saved preview's content.json re-renders into its own folder.
+        name = src.parent.name if src.stem == "content" else src.stem
+    else:
+        from db.connection import court_opinion_repo
+        from instagram.content import build_carousel
+        opinion = court_opinion_repo.select_one(condition={"case_key": source})
+        if not opinion:
+            logger.error("No court_opinion with case_key %s", source)
+            return
+        content = await build_carousel(opinion)
+        name = opinion.slug or source
+    out_dir = Path("instagram_previews") / name
+    paths = await render_slides(content, out_dir)
+    (out_dir / "content.json").write_text(content.model_dump_json(indent=2), encoding="utf-8")
+    (out_dir / "caption.txt").write_text(content.caption, encoding="utf-8")
+    logger.info("Preview ready: %s (%d slides)", out_dir.resolve() / "carousel.html", len(paths))
+
+async def cmd_instagram(dry_run: bool = False):
+    """Publish WordPress posts tagged for Instagram as carousels."""
+    from instagram.publisher import publish_pending
+    logger.info("Running Instagram publisher%s", " (dry run)" if dry_run else "")
+    report = await publish_pending(dry_run=dry_run)
+    logger.info(report.summary())
+    if report.eventful and not dry_run:
+        notifier.reply(report.summary())
+    return report
+
 async def cmd_all():
     """Run the full pipeline: scrape -> classify -> analyze -> upload -> promote."""
     try:
@@ -159,6 +201,11 @@ def main():
     subparsers.add_parser("promote-to-branding", help="Run promote to branding migration")
     subparsers.add_parser("tag-opinions", help="Run opinion tagger to add tags to opinions based on their content")
     subparsers.add_parser("seo-titles", help="Backfill SEO titles for CourtOpinions whose seo_title is NULL")
+    ig = subparsers.add_parser("instagram", help="Publish WordPress posts tagged for Instagram")
+    ig.add_argument("--dry-run", action="store_true", help="List what would be posted; post nothing")
+    ig_preview = subparsers.add_parser("instagram-preview", help="Render an Instagram carousel locally from a content JSON file")
+    ig_preview.add_argument("source", nargs="?", default="instagram/fixtures/mcdowell.json",
+                            help="content .json file, or a court_opinion case_key")
 
     args = parser.parse_args()
 
@@ -202,6 +249,10 @@ def main():
         cmd_tag_opinions()
     elif command == "seo-titles":
         asyncio.run(cmd_seo_titles())
+    elif command == "instagram":
+        asyncio.run(cmd_instagram(dry_run=args.dry_run))
+    elif command == "instagram-preview":
+        asyncio.run(cmd_instagram_preview(args.source))
     else:
         logger.error("Unknown command: %s", command)
 

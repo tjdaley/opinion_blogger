@@ -21,3 +21,6 @@ fastapi
 uvicorn[standard]
 
 google-api-python-client
+jinja2
+playwright
+pillow

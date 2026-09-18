@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{ c.case_name }} - Instagram carousel</title>
+<style>
+  @font-face { font-family: "Inter"; src: url("{{ fonts }}/Inter.ttf"); font-weight: 100 900; }
+  @font-face { font-family: "Playfair Display"; src: url("{{ fonts }}/PlayfairDisplay.ttf"); font-weight: 400 900; }
+  @font-face { font-family: "Playfair Display"; src: url("{{ fonts }}/PlayfairDisplay-Italic.ttf"); font-weight: 400 900; font-style: italic; }
+
+  /* txfamlaw.com brand tokens */
+  :root {
+    --navy: #0e2a47;
+    --navy-deep: #081a2e;
+    --gold: #f2a900;
+    --gold-dark: #b8660b;
+    --steel: #d6d8d9;
+    --warm: #e9d3c3;
+    --white: #ffffff;
+    --pad: 96px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #333; font-family: "Inter", sans-serif; font-variant-numeric: lining-nums; }
+
+  .slide {
+    position: relative;
+    width: 1080px; height: 1350px;
+    overflow: hidden;
+    color: var(--white);
+    background:
+      radial-gradient(1100px 380px at 100% 0%, rgba(242,169,0,.10), transparent 70%),
+      radial-gradient(900px 500px at 0% 100%, rgba(58,110,170,.18), transparent 70%),
+      linear-gradient(160deg, var(--navy) 0%, var(--navy-deep) 100%);
+    display: flex; flex-direction: column;
+    padding: var(--pad);
+    margin-bottom: 40px;
+  }
+  /* Faint pinstripe - a nod to the suit */
+  .slide::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(90deg, rgba(255,255,255,.028) 0 2px, transparent 2px 36px);
+  }
+  .slide > * { position: relative; }
+
+  .eyebrow {
+    font-weight: 600; font-size: 26px; letter-spacing: .22em; text-transform: uppercase;
+    color: var(--gold); white-space: nowrap;
+  }
+  .eyebrow .dot { opacity: .6; margin: 0 .5em; }
+  .rule { width: 120px; height: 4px; background: var(--gold); border-radius: 2px; }
+
+  h1, h2 { font-family: "Playfair Display", serif; font-weight: 700; line-height: 1.12; letter-spacing: -.005em; }
+
+  /* Text blocks that must shrink to fit their box */
+  .fit { flex: 1 1 auto; min-height: 0; overflow: hidden; display: flex; flex-direction: column; justify-content: center; }
+
+  /* Footer: wordmark + page count */
+  .footer {
+    margin-top: auto; display: flex; align-items: flex-end; justify-content: space-between;
+    padding-top: 40px;
+  }
+  .wordmark { line-height: 1; text-align: left; }
+  /* Firm logo, recolored per slide: the file is used only as a mask, so the
+     same logo.png renders white on navy and navy on gold. */
+  .firm-logo {
+    width: {{ logo_w }}px; height: {{ logo_h }}px; margin-top: 18px;
+    background-color: var(--logo-color, var(--white));
+    -webkit-mask: url("{{ logo }}") left center / contain no-repeat;
+            mask: url("{{ logo }}") left center / contain no-repeat;
+  }
+  .wordmark .name { font-family: "Playfair Display", serif; font-style: italic; font-weight: 700; font-size: 52px; }
+  .wordmark .sub { margin-top: 10px; font-size: 17px; font-weight: 600; letter-spacing: .32em; color: var(--steel); }
+  .pager { font-size: 24px; font-weight: 500; color: var(--steel); letter-spacing: .1em; }
+  .pager b { color: var(--gold); font-weight: 700; }
+
+  .avatar {
+    border-radius: 50%; object-fit: cover; display: block;
+    border: 6px solid var(--gold);
+    box-shadow: 0 0 0 10px var(--navy), 0 0 0 12px rgba(242,169,0,.55);
+  }
+
+  /* ---------- 1. Cover ---------- */
+  .cover .fit { justify-content: flex-start; padding-top: 110px; }
+  .cover h1 { font-size: 104px; margin: 44px 0 52px; }
+  .cover .case { font-family: "Playfair Display", serif; font-style: italic; font-size: 50px; color: var(--gold); }
+  .cover .cite { margin-top: 14px; font-size: 28px; color: var(--steel); letter-spacing: .02em; }
+  .cover .byline { display: flex; align-items: center; gap: 30px; }
+  .cover .byline .avatar { width: 150px; height: 150px; }
+  .cover .byline .who { font-family: "Playfair Display", serif; font-weight: 700; font-size: 50px; }
+  .cover .byline .role { margin-top: 6px; font-size: 22px; letter-spacing: .18em; text-transform: uppercase; color: var(--steel); }
+  .cover .swipe { font-size: 26px; font-weight: 600; letter-spacing: .2em; text-transform: uppercase; color: var(--gold); }
+
+  /* ---------- 2/3. Statement slides ---------- */
+  .statement .num {
+    font-family: "Playfair Display", serif; font-weight: 700; font-size: 200px; line-height: .8;
+    color: transparent; -webkit-text-stroke: 3px rgba(242,169,0,.55);
+    margin-bottom: 36px;
+  }
+  .statement h2 { font-size: 66px; font-weight: 600; margin-top: 44px; }
+
+  /* ---------- 4. Takeaways (gold) ---------- */
+  .gold-slide { background: linear-gradient(160deg, #f5b51f 0%, var(--gold) 55%, #e29a00 100%); color: var(--navy); }
+  .gold-slide::before { background: repeating-linear-gradient(90deg, rgba(14,42,71,.035) 0 2px, transparent 2px 36px); }
+  .gold-slide { --logo-color: var(--navy); }
+  .gold-slide .eyebrow { color: var(--navy); }
+  .gold-slide .rule { background: var(--navy); }
+  .gold-slide h2 { font-size: 76px; margin: 36px 0 20px; }
+  .gold-slide ol { list-style: none; counter-reset: t; }
+  .gold-slide li {
+    counter-increment: t; display: grid; grid-template-columns: 84px 1fr; gap: 8px;
+    font-size: 44px; font-weight: 500; line-height: 1.3;
+    padding: 34px 0; border-top: 2px solid rgba(14,42,71,.22);
+  }
+  .gold-slide li::before {
+    content: counter(t, decimal-leading-zero);
+    font-family: "Playfair Display", serif; font-weight: 700; font-size: 44px; line-height: 1.3;
+  }
+  .gold-slide .wordmark .sub, .gold-slide .pager { color: rgba(14,42,71,.75); }
+  .gold-slide .pager b { color: var(--navy); }
+
+  /* ---------- 5. CTA ---------- */
+  .cta { align-items: center; text-align: center; }
+  .cta .fit { align-items: center; }
+  .cta .avatar { width: 340px; height: 340px; margin-bottom: 56px; }
+  .cta h2 { font-size: 78px; }
+  .cta .rule { margin: 44px auto; }
+  .cta .link { font-size: 40px; font-weight: 600; color: var(--gold); letter-spacing: .02em; }
+  .cta .site { margin-top: 16px; font-size: 32px; color: var(--steel); }
+  .cta .disclaimer { margin-top: 64px; max-width: 800px; font-size: 21px; line-height: 1.5; color: rgba(214,216,217,.72); }
+  .cta .footer { width: 100%; }
+</style>
+</head>
+<body>
+
+{# ---------- 1. Cover ---------- #}
+<section class="slide cover">
+  <div class="eyebrow">{{ c.court_label }}<span class="dot">·</span>{{ c.topic_label }}</div>
+  <div class="fit">
+    <h1>{{ c.hook }}</h1>
+    <div class="rule"></div>
+    <div style="margin-top: 44px">
+      <div class="case">{{ c.case_name }}</div>
+      <div class="cite">{{ c.citation_line }}</div>
+    </div>
+  </div>
+  <div class="footer">
+    <div class="byline">
+      <img class="avatar" src="{{ headshot }}" alt="">
+      <div>
+        <div class="who">Thomas J. Daley</div>
+        {% if logo %}<div class="firm-logo" role="img" aria-label="{{ firm }}"></div>{% else %}<div class="role">{{ firm }}</div>{% endif %}
+      </div>
+    </div>
+    <div class="swipe">Swipe →</div>
+  </div>
+</section>
+
+{# ---------- 2. The question ---------- #}
+<section class="slide statement">
+  <div class="num">01</div>
+  <div class="eyebrow">The question</div>
+  <div class="fit"><h2>{{ c.issue }}</h2></div>
+  {% set page = 2 %}{% include "_footer.html.j2" %}
+</section>
+
+{# ---------- 3. The holding ---------- #}
+<section class="slide statement">
+  <div class="num">02</div>
+  <div class="eyebrow">What the court held</div>
+  <div class="fit"><h2>{{ c.holding }}</h2></div>
+  {% set page = 3 %}{% include "_footer.html.j2" %}
+</section>
+
+{# ---------- 4. Why it matters ---------- #}
+<section class="slide gold-slide">
+  <div class="eyebrow">Why it matters</div>
+  <div class="fit" style="justify-content: flex-start">
+    <h2>Practice pointers</h2>
+    <ol>
+      {% for t in c.takeaways %}<li>{{ t }}</li>{% endfor %}
+    </ol>
+  </div>
+  {% set page = 4 %}{% include "_footer.html.j2" %}
+</section>
+
+{# ---------- 5. Call to action ---------- #}
+<section class="slide cta">
+  <div class="fit">
+    <img class="avatar" src="{{ headshot }}" alt="">
+    <h2>Read the full<br>case analysis</h2>
+    <div class="rule"></div>
+    <div class="link">Link in bio</div>
+    <div class="site">thomasjdaley.com</div>
+    <p class="disclaimer">General information only, not legal advice. Reading this post does not create an attorney–client relationship. Every case turns on its own facts.</p>
+  </div>
+  {% set page = 5 %}{% include "_footer.html.j2" %}
+</section>
+
+<script>
+  // Shrink type in any .fit box whose content overflows, in 2% steps, so a
+  // long holding degrades gracefully instead of being clipped.
+  window.fitText = function () {
+    document.querySelectorAll(".fit").forEach(function (box) {
+      var targets = box.querySelectorAll("h1, h2, li");
+      for (var i = 0; i < 40 && box.scrollHeight > box.clientHeight + 1; i++) {
+        targets.forEach(function (el) {
+          var s = parseFloat(getComputedStyle(el).fontSize);
+          el.style.fontSize = (s * 0.98) + "px";
+        });
+      }
+    });
+    // Eyebrows stay on one line; shrink any that are wider than the slide.
+    document.querySelectorAll(".eyebrow").forEach(function (el) {
+      var room = el.parentElement.clientWidth - 2 * parseFloat(getComputedStyle(el.parentElement).paddingLeft);
+      for (var i = 0; i < 40 && el.scrollWidth > room; i++) {
+        el.style.fontSize = (parseFloat(getComputedStyle(el).fontSize) * 0.97) + "px";
+      }
+    });
+    return true;
+  };
+</script>
+</body>
+</html>

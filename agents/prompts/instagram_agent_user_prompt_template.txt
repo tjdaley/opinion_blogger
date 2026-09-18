@@ -1,0 +1,12 @@
+Write the Instagram carousel text for this case.
+
+CASE NAME: {case_name}
+COURT: {court_name}
+DECIDED: {opinion_date}
+TOPIC CATEGORY: {category}
+
+LITIGATION TAKEAWAY (from the post):
+{litigation_takeaway}
+
+APPROVED BLOG POST:
+{blog_post}
