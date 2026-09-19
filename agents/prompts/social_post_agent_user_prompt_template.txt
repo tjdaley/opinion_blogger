@@ -1,0 +1,11 @@
+Write the {channel} post for this blog post.
+
+AUDIENCE: {audience_label}
+{audience_rules}
+
+SOURCE TYPE: {kind_rules}
+
+BLOG POST TITLE: {title}
+
+BLOG POST:
+{text}

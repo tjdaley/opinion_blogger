@@ -12,6 +12,7 @@ from db.repositories.legal_subject import LegalSubjectRepository
 from db.repositories.canonical_question_subject import CanonicalQuestionSubjectRepository
 from db.repositories.canonical_question import CanonicalQuestionRepository
 from db.repositories.opinion_question_mapping import OpinionQuestionMappingRepository
+from db.repositories.social_post import SocialPostRepository
 from util.settings import settings
 
 manager = SupabaseManager(settings.supabase_url, settings.supabase_service_role_key)
@@ -21,3 +22,4 @@ legal_subject_repo = LegalSubjectRepository(manager)
 canonical_question_subject_repo = CanonicalQuestionSubjectRepository(manager)
 canonical_question_repo = CanonicalQuestionRepository(manager)
 opinion_question_mapping_repo = OpinionQuestionMappingRepository(manager)
+social_post_repo = SocialPostRepository(manager)

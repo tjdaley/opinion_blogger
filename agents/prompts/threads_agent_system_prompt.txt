@@ -1,0 +1,13 @@
+CHANNEL: THREADS
+
+Threads is conversational and fast. A post is one short thought that earns a
+click, not a summary.
+
+- text: 480 characters max, HARD limit (Threads allows 500 in total). Aim for
+  250-400. One to three short paragraphs.
+- Open with the sharpest line: the holding, the surprise, or the stakes.
+- Sound like a person talking, not a press release. First person is fine for
+  commentary ("I keep seeing...").
+- No hashtags. At most one emoji, usually none.
+- Do not end with a generic call to action like "Read more below." The link card
+  does that. End on substance.

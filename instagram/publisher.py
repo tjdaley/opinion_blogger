@@ -41,6 +41,7 @@ class PublishedButUnrecorded(Exception):
 
 @dataclass
 class RunReport:
+    label: str = "Instagram"
     published: List[str] = field(default_factory=list)
     failed: List[str] = field(default_factory=list)
     deferred: List[str] = field(default_factory=list)
@@ -51,7 +52,7 @@ class RunReport:
         return bool(self.published or self.failed or self.notes)
 
     def summary(self) -> str:
-        lines = [f"Instagram: {len(self.published)} published, {len(self.failed)} failed, "
+        lines = [f"{self.label}: {len(self.published)} published, {len(self.failed)} failed, "
                  f"{len(self.deferred)} deferred."]
         lines += [f"  posted: {p}" for p in self.published]
         lines += [f"  FAILED: {f}" for f in self.failed]

@@ -78,6 +78,44 @@ class Settings(BaseSettings):
     instagram_max_posts_per_run: int = 1                # spread posts out across runs
     instagram_token_file: str = "instagram_token.json"  # refreshed token is persisted here
 
+    # Threads
+    threads_access_token: str = ""
+    threads_app_secret: str = ""
+    threads_app_id: str = ""
+    threads_app_name: str = ""
+    threads_user_name: str = ""
+    threads_user_id: str = "<not used>"
+    threads_agent_vendor: str = ""  # blank = llm_vendor
+    threads_agent_model: str = ""   # blank = that vendor's default model
+    threads_graph_url: str = "https://graph.threads.net/v1.0"
+    threads_ok_tag: str = "ok_for_threads"          # WP tag: approved to post
+    threads_done_tag: str = "published_to_threads"  # WP tag: posted
+    threads_failed_tag: str = "threads_failed"      # WP tag: needs a human
+    threads_token_file: str = "threads_token.json"
+
+    # Facebook
+    facebook_page_access_token: str = ""
+    facebook_user_access_token: str = ""
+    facebook_page_id: str = ""
+    facebook_app_scoped_user_id: str = ""
+    facebook_app_id: str = ""
+    facebook_agent_vendor: str = ""  # blank = llm_vendor
+    facebook_agent_model: str = ""   # blank = that vendor's default model
+    facebook_graph_url: str = "https://graph.facebook.com/v25.0"
+    facebook_ok_tag: str = "ok_for_facebook"          # WP tag: approved to post
+    facebook_done_tag: str = "published_to_facebook"  # WP tag: posted
+    facebook_failed_tag: str = "facebook_failed"      # WP tag: needs a human
+    facebook_token_file: str = "facebook_token.json"
+
+    # Threads + Facebook (social/). Per-channel WP tags are derived from the
+    # channel name: ok_for_<channel>, published_to_<channel>, <channel>_failed.
+    social_audience_attorneys_tag: str = "audience_attorneys"  # optional WP override tag
+    social_audience_public_tag: str = "audience_public"        # optional WP override tag
+    social_max_posts_per_run: int = 1
+    social_scheduled_channels: str = "instagram,facebook,threads"  # run by `all`; remove one to pause it
+    social_agent_vendor: str = ""  # blank = llm_vendor
+    social_agent_model: str = ""
+
     # SCOTXBLOG Settings
     table_element_id: str = "stagingDateTable"
     scotx_url: str = "https://data.scotxblog.com/scotx/staging/decided"

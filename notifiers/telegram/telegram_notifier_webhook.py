@@ -28,6 +28,8 @@ HELP_TEXT = (
     "  retry <case_number>\n"
     "  upload\n"
     "  instagram [dry]\n"
+    "  threads [dry]\n"
+    "  facebook [dry]\n"
     "  promote\n"
     "  approve\n"
     "  all\n"
@@ -88,6 +90,16 @@ async def _run_instagram(dry_run: bool):
     except Exception as e:
         logger.exception("instagram failed")
         _reply(f"instagram error: {e}")
+
+async def _run_social(channel: str, dry_run: bool):
+    """Background task: publish (or list) WordPress posts tagged for a channel."""
+    from social.publisher import publish_pending as publish_social
+    try:
+        report = await publish_social(channel, dry_run=dry_run)
+        _reply(("[dry run] " if dry_run else "") + report.summary())
+    except Exception as e:
+        logger.exception("%s failed", channel)
+        _reply(f"{channel} error: {e}")
 
 async def _run_promote_to_branding():
     """Background task: run the promote to branding migration."""
@@ -168,6 +180,12 @@ async def _dispatch(body: str, background_tasks: BackgroundTasks):
         dry_run = arg.lower() in ("dry", "dry-run", "list")
         _reply(f"Queued Instagram {'dry run' if dry_run else 'publish'}. Will message when done.")
         background_tasks.add_task(_run_instagram, dry_run)
+        return
+
+    if cmd in ("threads", "facebook"):
+        dry_run = arg.lower() in ("dry", "dry-run", "list")
+        _reply(f"Queued {cmd.title()} {'dry run' if dry_run else 'publish'}. Will message when done.")
+        background_tasks.add_task(_run_social, cmd, dry_run)
         return
 
     if cmd == "promote":

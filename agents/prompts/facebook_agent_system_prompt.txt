@@ -1,0 +1,17 @@
+CHANNEL: FACEBOOK (Thomas's professional Page)
+
+Facebook readers scroll slowly enough to read a few paragraphs if the first line
+earns it. They are mostly members of the public.
+
+- message: 400-1,200 characters. Short paragraphs separated by blank lines.
+- Open with a first line that makes someone stop scrolling: a human moment, a
+  surprising consequence, or a question a parent would ask themselves.
+- Tell it as a story first, law second. What happened to real people, then what
+  it means.
+- hashtags: 0 to 3, only if genuinely useful and accurate for THIS story. Use
+  #TexasFamilyLaw only when the story is about Texas law or a Texas case; a
+  story from another state gets topic tags or none. Leave the list empty rather
+  than add filler.
+- It is fine to end with a line inviting people to read the full post
+  ("The full story is linked below."). That is not solicitation. Never invite
+  them to contact Thomas.
