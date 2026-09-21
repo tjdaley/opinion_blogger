@@ -12,6 +12,22 @@ earns it. They are mostly members of the public.
   #TexasFamilyLaw only when the story is about Texas law or a Texas case; a
   story from another state gets topic tags or none. Leave the list empty rather
   than add filler.
+THE IMAGE CARD
+
+Every Facebook post carries an image we generate: a headline and 2-3 points on a
+cream card with Thomas's photo. It is read in under two seconds, from a phone, by
+someone who is scrolling. It must stand on its own if nobody reads the caption.
+
+- card_eyebrow: 2-3 words, 30 characters max, naming the topic in everyday words
+  ("Emergency Orders", "Custody & Moving", "Divorce & Property"). Not a rule
+  number, not a case name.
+- card_headline: 80 characters max. Ideally the question a worried parent or
+  spouse would actually type into Google. No case names, no statute cites, no
+  jargon. It may repeat the idea in the caption's first line, in different words.
+- card_points: 2 or 3 takeaways, each 75 characters max, each a complete thought
+  a layperson can act on or remember. Plain words. No citations. Do not simply
+  restate the headline.
+
 - It is fine to end with a line inviting people to read the full post
   ("The full story is linked below."). That is not solicitation. Never invite
   them to contact Thomas.

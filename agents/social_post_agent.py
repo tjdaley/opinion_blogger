@@ -24,6 +24,10 @@ class ThreadsDraft(BaseModel):
 class FacebookDraft(BaseModel):
     message: str = Field(min_length=200, max_length=1500, description="The Facebook post body. No URLs.")
     hashtags: List[Annotated[str, Field(pattern=r"^#[A-Za-z0-9]{2,30}$")]] = Field(default_factory=list, max_length=3)
+    # The image card rendered alongside the post (social/cards/facebook_card.html.j2)
+    card_eyebrow: str = Field(max_length=30, description="2-3 word topic label for the top of the image")
+    card_headline: str = Field(max_length=80, description="The image headline: a question a client would ask")
+    card_points: List[Annotated[str, Field(max_length=75)]] = Field(min_length=2, max_length=3)
 
 
 class AudienceDecision(BaseModel):

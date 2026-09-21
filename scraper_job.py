@@ -166,19 +166,24 @@ async def cmd_social_preview(channels: list[str], ref: str):
     """Write Threads/Facebook posts for one WordPress post, locally, without posting."""
     from pathlib import Path
     from social.compose import compose
+    from social.publisher import category_id
     from social.source import from_wp
     from post_migrator import get_tag_id
     src = from_wp(_fetch_wp_post(ref))
     attorneys_tag = get_tag_id(settings.social_audience_attorneys_tag)
     public_tag = get_tag_id(settings.social_audience_public_tag)
+    news_category = category_id(settings.social_news_category)
     out_dir = Path("social_previews")
     out_dir.mkdir(exist_ok=True)
     for ch in channels:
-        c = await compose(ch, src, attorneys_tag, public_tag)
+        c = await compose(ch, src, attorneys_tag, public_tag, news_category)
         path = out_dir / f"{src.wp_id}-{ch}.txt"
         path.write_text(f"[{ch} | audience: {c.audience} | {c.audience_reason}]\n"
                         f"[link card: {c.link}]\n[{len(c.text)} chars]\n\n{c.text}\n", encoding="utf-8")
         logger.info("Preview: %s", path.resolve())
+        if c.card:
+            from social.card import render_card
+            logger.info("Preview image: %s", await render_card(c.card, out_dir / f"{src.wp_id}-{ch}.jpg"))
 
 async def cmd_social(channel: str, dry_run: bool = False):
     """Publish WordPress posts tagged for Threads or Facebook."""

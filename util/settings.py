@@ -112,6 +112,7 @@ class Settings(BaseSettings):
     social_audience_attorneys_tag: str = "audience_attorneys"  # optional WP override tag
     social_audience_public_tag: str = "audience_public"        # optional WP override tag
     social_max_posts_per_run: int = 1
+    social_news_category: str = "news"  # hand-made artwork; Facebook keeps the link preview
     social_scheduled_channels: str = "instagram,facebook,threads"  # run by `all`; remove one to pause it
     social_agent_vendor: str = ""  # blank = llm_vendor
     social_agent_model: str = ""

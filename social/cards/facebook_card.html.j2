@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{ c.headline }} - Facebook card</title>
+<style>
+  @font-face { font-family: "Inter"; src: url("{{ fonts }}/Inter.ttf"); font-weight: 100 900; }
+  @font-face { font-family: "Playfair Display"; src: url("{{ fonts }}/PlayfairDisplay.ttf"); font-weight: 400 900; }
+  @font-face { font-family: "Playfair Display"; src: url("{{ fonts }}/PlayfairDisplay-Italic.ttf"); font-weight: 400 900; font-style: italic; }
+
+  /* Same brand tokens as the Instagram slides, arranged light-first: this one
+     speaks to clients, not to the bar. */
+  :root {
+    --navy: #0e2a47;
+    --gold: #f2a900;
+    --gold-deep: #b8660b;
+    --slate: #2f3a45;
+    --warm: #e9d3c3;
+    --cream: #fbf7f2;
+    --white: #ffffff;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #333; font-family: "Inter", sans-serif; font-variant-numeric: lining-nums; }
+
+  .card {
+    position: relative;
+    width: 1080px; height: 1350px;
+    overflow: hidden;
+    display: flex; flex-direction: column;
+    background:
+      radial-gradient(760px 520px at 100% 0%, rgba(233,211,195,.55), transparent 70%),
+      radial-gradient(620px 420px at 0% 42%, rgba(242,169,0,.10), transparent 70%),
+      var(--cream);
+    color: var(--navy);
+  }
+  .card::before {  /* gold rule across the very top */
+    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 14px;
+    background: linear-gradient(90deg, var(--gold) 0%, var(--gold-deep) 100%);
+  }
+
+  .body { flex: 1 1 auto; min-height: 0; padding: 104px 92px 40px; display: flex; flex-direction: column; }
+
+  .eyebrow {
+    font-size: 25px; font-weight: 700; letter-spacing: .2em; text-transform: uppercase;
+    color: var(--gold-deep); white-space: nowrap;
+  }
+
+  h1 {
+    font-family: "Playfair Display", serif; font-weight: 700; font-size: 82px; line-height: 1.1;
+    letter-spacing: -.01em; margin: 30px 0 0;
+  }
+  .rule { width: 116px; height: 5px; background: var(--gold); border-radius: 3px; margin: 40px 0 0; }
+
+  /* The points: what a client should take away */
+  ul { list-style: none; margin: 48px 0 0; flex: 1 1 auto; min-height: 0; }
+  li {
+    display: grid; grid-template-columns: 74px 1fr; align-items: start;
+    font-size: 40px; line-height: 1.34; color: var(--slate);
+    padding: 30px 0; border-top: 2px solid rgba(14,42,71,.12);
+  }
+  li:last-child { border-bottom: 2px solid rgba(14,42,71,.12); }
+  li::before {   /* gold check */
+    content: ""; width: 42px; height: 42px; margin-top: 8px; border-radius: 50%;
+    background: var(--gold) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='none' stroke='%230e2a47' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round' d='M4 12.5l5.2 5.2L20 7'/></svg>") center / 24px 24px no-repeat;
+  }
+
+  /* Footer: who is talking */
+  .footer {
+    background: var(--navy); color: var(--white);
+    padding: 40px 92px; display: flex; align-items: center; gap: 34px;
+  }
+  .avatar {
+    width: 132px; height: 132px; border-radius: 50%; object-fit: cover; flex: none;
+    border: 5px solid var(--gold);
+  }
+  .who .name { font-family: "Playfair Display", serif; font-weight: 700; font-size: 44px; line-height: 1; }
+  .firm-logo {
+    width: {{ logo_w }}px; height: {{ logo_h }}px; margin-top: 16px; background-color: var(--white);
+    -webkit-mask: url("{{ logo }}") left center / contain no-repeat;
+            mask: url("{{ logo }}") left center / contain no-repeat;
+  }
+  .who .firm-text { margin-top: 14px; font-size: 20px; font-weight: 600; letter-spacing: .26em; color: var(--warm); }
+  .site { margin-left: auto; text-align: right; }
+  .site .url { font-size: 30px; font-weight: 600; color: var(--gold); }
+  .site .cta { margin-top: 10px; font-size: 21px; color: rgba(255,255,255,.72); }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="body">
+    <div class="eyebrow">{{ c.eyebrow }}</div>
+    <h1>{{ c.headline }}</h1>
+    <div class="rule"></div>
+    <ul>
+      {% for p in c.points %}<li><span>{{ p }}</span></li>{% endfor %}
+    </ul>
+  </div>
+  <div class="footer">
+    <img class="avatar" src="{{ headshot }}" alt="">
+    <div class="who">
+      <div class="name">Thomas J. Daley</div>
+      {% if logo %}<div class="firm-logo" role="img" aria-label="{{ firm }}"></div>{% else %}<div class="firm-text">{{ firm | upper }}</div>{% endif %}
+    </div>
+    <div class="site">
+      <div class="url">thomasjdaley.com</div>
+      <div class="cta">Full story at the link</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Shrink the headline, then the points, until everything fits.
+  window.fitText = function () {
+    var body = document.querySelector(".body");
+    var h1 = document.querySelector("h1");
+    var items = document.querySelectorAll("li");
+    for (var i = 0; i < 60 && body.scrollHeight > body.clientHeight + 1; i++) {
+      var hs = parseFloat(getComputedStyle(h1).fontSize);
+      if (hs > 56) { h1.style.fontSize = (hs * 0.97) + "px"; continue; }
+      items.forEach(function (el) {
+        el.style.fontSize = (parseFloat(getComputedStyle(el).fontSize) * 0.97) + "px";
+      });
+    }
+    var eb = document.querySelector(".eyebrow");
+    for (var j = 0; j < 40 && eb.scrollWidth > body.clientWidth - 184; j++) {
+      eb.style.fontSize = (parseFloat(getComputedStyle(eb).fontSize) * 0.97) + "px";
+    }
+    return true;
+  };
+</script>
+</body>
+</html>

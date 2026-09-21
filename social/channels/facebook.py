@@ -29,9 +29,20 @@ class FacebookChannel:
     def publish(self, post: Composed) -> Tuple[str, Optional[str]]:
         base = settings.facebook_graph_url
         token = settings.facebook_page_access_token
-        r = requests.post(f"{base}/{settings.facebook_page_id}/feed",
-                          data={"message": post.text, "link": post.link, "access_token": token}, timeout=60)
-        post_id = check(r, "Facebook POST feed")["id"]
+
+        if post.image_url:
+            # Photo post: Facebook takes a link post's picture from the page's
+            # own og:image, which we can't override per post, so a generated
+            # card has to go up as a photo. The URL stays clickable in the text.
+            r = requests.post(f"{base}/{settings.facebook_page_id}/photos",
+                              data={"url": post.image_url, "message": f"{post.text}\n\n{post.link}",
+                                    "access_token": token}, timeout=120)
+            body = check(r, "Facebook POST photos")
+            post_id = body.get("post_id") or body["id"]
+        else:
+            r = requests.post(f"{base}/{settings.facebook_page_id}/feed",
+                              data={"message": post.text, "link": post.link, "access_token": token}, timeout=60)
+            post_id = check(r, "Facebook POST feed")["id"]
         try:
             r = requests.get(f"{base}/{post_id}", params={"fields": "permalink_url", "access_token": token}, timeout=30)
             link = check(r, "Facebook GET permalink").get("permalink_url")

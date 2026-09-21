@@ -10,17 +10,21 @@ commentary), with the record kept in social_posts:
   * platform refusals get <channel>_failed; network errors are retried.
 """
 import datetime
+import tempfile
+from pathlib import Path
 from typing import Optional
 
 import httpx
 import requests
 
 from db.connection import social_post_repo
+from instagram import storage
 from instagram.publisher import RunReport
 from post_migrator import get_posts_to_process, get_tag_id
 from social.channels.base import Channel
 from social.channels.facebook import FacebookChannel
 from social.channels.threads import ThreadsChannel
+from social.card import render_card
 from social.compose import compose
 from social.source import from_wp
 from util.loggerfactory import LoggerFactory
@@ -46,6 +50,12 @@ def _update_post(wp_id: int, **fields) -> None:
     r.raise_for_status()
 
 
+def category_id(slug: str) -> Optional[int]:
+    found = requests.get(f"{settings.wp_base_url}/categories", params={"slug": slug},
+                         auth=(settings.wp_username, settings.wp_app_password), timeout=30).json()
+    return found[0]["id"] if found else None
+
+
 def _swap_tags(post: dict, ok_id: int, done_id: Optional[int]) -> None:
     tags = [t for t in post["tags"] if t != ok_id]
     if done_id and done_id not in tags:
@@ -67,6 +77,7 @@ async def publish_pending(channel_name: str, dry_run: bool = False, limit: Optio
             return report
     attorneys_tag = get_tag_id(settings.social_audience_attorneys_tag)
     public_tag = get_tag_id(settings.social_audience_public_tag)
+    news_category = category_id(settings.social_news_category)
 
     approved = get_posts_to_process(ok_name)
     held = [p for p in approved if failed_id and failed_id in p["tags"]]
@@ -105,8 +116,17 @@ async def publish_pending(channel_name: str, dry_run: bool = False, limit: Optio
             continue
         attempted += 1
 
+        prefix = None
         try:
-            composed = await compose(channel_name, src, attorneys_tag, public_tag)
+            composed = await compose(channel_name, src, attorneys_tag, public_tag, news_category)
+            if composed.card:
+                # Host the card where the platform can fetch it, exactly as the
+                # Instagram carousel does; it is deleted again once published.
+                storage.ensure_bucket()
+                prefix = storage.new_prefix(f"{channel_name}-{src.wp_id}")
+                with tempfile.TemporaryDirectory() as tmp:
+                    image = await render_card(composed.card, Path(tmp) / f"{channel_name}-{src.wp_id}.jpg")
+                    composed.image_url = storage.upload_slides(prefix, [image])[0]
             remote_id, permalink = channel.publish(composed)
             logger.info("Published %s to %s as %s", src.title, channel_name, remote_id)
             try:
@@ -120,6 +140,11 @@ async def publish_pending(channel_name: str, dry_run: bool = False, limit: Optio
                 raise PublishedButUnrecorded(f"LIVE as {remote_id}, but saving that to the DB failed: {e}") from e
             _swap_tags(post, ok_id, done_id)
             report.published.append(f"{src.title} ({composed.audience})\n    {permalink or remote_id}")
+            if prefix:
+                try:
+                    storage.delete_prefix(prefix)  # Facebook has its own copy now
+                except Exception as e:
+                    logger.warning("Could not delete hosted card %s (sweep will): %s", prefix, e)
         except TRANSIENT as e:
             logger.warning("Transient error on %s; will retry next run: %s", src.title, e)
             report.deferred.append(f"{src.title} (network: {e.__class__.__name__})")
