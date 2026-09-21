@@ -133,10 +133,14 @@ def configure_model(mode: str = "chat", override_vendor: Optional[str] = None, o
         return model
 
     if llm_vendor == 'openai':
-        from pydantic_ai.models.openai import OpenAIChatModel
+        # Responses API (/v1/responses), not chat completions: reasoning models
+        # such as gpt-5.6-sol reject function tools on /v1/chat/completions, and
+        # every agent here uses structured output, which pydantic-ai sends as a
+        # function tool.
+        from pydantic_ai.models.openai import OpenAIResponsesModel
         from pydantic_ai.providers.openai import OpenAIProvider
         provider = OpenAIProvider(api_key=settings.openai_api_key)
-        model = OpenAIChatModel(override_model or settings.openai_model, provider=provider, settings=model_settings)
+        model = OpenAIResponsesModel(override_model or settings.openai_model, provider=provider, settings=model_settings)
         return model
 
     if llm_vendor == 'anthropic':

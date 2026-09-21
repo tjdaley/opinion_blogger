@@ -47,6 +47,31 @@ def get_tag_id(tag_slug: str) -> Union[int, None]:
         return tags[0]['id']
     return None
 
+def promotion_counts() -> dict[str, int]:
+    """
+    Break down the posts tagged ok_to_publish by what process_workflow would do.
+
+    'ready' that stops falling means promotion is failing silently; 'failed'
+    and 'review' are posts it will never pick up until a human intervenes.
+
+    Returns:
+        {'ready': ..., 'failed': ..., 'review': ...}
+    """
+    review_id = get_tag_id(settings.wp_review_tag)
+    error_id = get_tag_id(settings.wp_error_tag)
+    posts = get_posts_to_process(settings.wp_post_tag)
+    counts = {"ready": 0, "failed": 0, "review": 0}
+    for post in posts:
+        tags = set(post["tags"])  # type: ignore
+        if error_id in tags:
+            counts["failed"] += 1
+        elif review_id in tags:
+            counts["review"] += 1
+        else:
+            counts["ready"] += 1
+    return counts
+
+
 def count_posts_by_status(status: str, per_page: int = 100) -> int:
     """
     Return the count of WordPress Blog posts in the given status.
@@ -326,6 +351,30 @@ async def process_workflow():
     tag_id_review = get_tag_id(tag_to_review)
     posts = get_posts_to_process(tag_to_publish)
 
+    def _mark_migrated(post: dict[str, str]) -> bool:
+        """Swap ok_to_publish for the success tag. Retries, and never reports
+        failure back to the caller as a migration error: the opinion is already
+        in court_opinions by this point, so tagging the post failed would be a
+        lie that also blocks it forever."""
+        current_tags: list[int] = post['tags']  # type: ignore
+        new_tags = [t for t in current_tags if t != tag_id_to_publish]
+        if tag_id_to_mark_success and tag_id_to_mark_success not in new_tags:
+            new_tags.append(tag_id_to_mark_success)
+        for attempt in range(3):
+            try:
+                resp = requests.post(f"{WP_URL}/posts/{post['id']}",
+                                     json={'tags': new_tags},
+                                     auth=(WP_USER, WP_APP_PASSWORD))
+                resp.raise_for_status()
+                logger.info("Updated tags for post %s to %s", post.get('id'), new_tags)
+                return True
+            except Exception as e:
+                logger.warning("Tag update attempt %d failed for post %s: %s", attempt + 1, post.get('id'), e)
+                time.sleep(2 ** attempt)
+        logger.error("MIGRATED but could not re-tag post %s; it will be re-detected and re-tagged "
+                     "on the next run.", post.get('id'))
+        return False
+
     def _tag_migration_error(post: dict[str, str]):
         current_tags: list[int] = post['tags']  # type: ignore
         if tag_id_to_mark_error and tag_id_to_mark_error not in current_tags:
@@ -371,8 +420,12 @@ async def process_workflow():
             # 3. Make sure the tracked_opinion.opinion_link does not already exist in the court_opinion table to avoid duplicates
             existing_opinion = court_opinion_repo.select_one(condition={"opinion_link": tracked_opinion.opinion_link})
             if existing_opinion:
-                logger.warning("An opinion with the same opinion_link already exists in court_opinion for case key: %s. Skipping to avoid duplicate.", case_key)
-                _tag_migration_error(post)
+                # Already in court_opinions - usually this very post, migrated on an
+                # earlier run whose re-tag didn't stick. That is a completed
+                # migration, not an error: finish the tagging instead of flagging it.
+                logger.info("Opinion for case key %s is already migrated; re-tagging post %s as done.",
+                            case_key, post.get('id'))
+                _mark_migrated(post)
                 continue
 
             # 4. Run the migration extraction agent to extract structured data and assign a category
@@ -411,21 +464,27 @@ async def process_workflow():
                 logger.info("Inserting opinion for case %s into Supabase.", tracked_opinion.case_name)
                 court_opinion_repo.insert(opinion.model_dump(mode="json"))
                 logger.info("Saved %s to Supabase.", tracked_opinion.case_name)
-
-                # 6. Remove the tag from WordPress so it doesn't process again
-                current_tags: list[int] = post['tags']  # type: ignore
-                new_tags = [t for t in current_tags if t != tag_id_to_publish]
-                if tag_id_to_mark_success and tag_id_to_mark_success not in new_tags:
-                    new_tags.append(tag_id_to_mark_success)
-
-                logger.info("Updated tags for post %s to %s...migrating to WP", post.get('id'), new_tags)
-                requests.post(f"{WP_URL}/posts/{post['id']}",
-                            json={'tags': new_tags},
-                            auth=(WP_USER, WP_APP_PASSWORD))
-                successfully_uploaded += 1
             except Exception as db_e:
+                # A unique-key rejection (slug/citation) means this opinion is
+                # already on the branding site under a companion case number:
+                # courts issue one opinion for paired appeals, and the scraper
+                # tracks each number separately with its own PDF link, so the
+                # opinion_link check above cannot catch it. Already published,
+                # not a failure.
+                if "duplicate key" in str(db_e).lower():
+                    logger.info("Post %s duplicates an opinion already migrated under a companion "
+                                "case number (%s); re-tagging as done.", post.get('id'), db_e)
+                    _mark_migrated(post)
+                    continue
                 logger.error("DB Error on post %s: %s", post.get('id'), db_e)
                 _tag_migration_error(post)
+                continue
+
+            # 6. Re-tag in WordPress so it isn't processed again. Deliberately
+            # outside the try above: the row is saved, so a tagging problem is
+            # not a migration failure.
+            _mark_migrated(post)
+            successfully_uploaded += 1
 
         except Exception as e:
             logger.error("Error on post %s: %s", post.get('id'), e)

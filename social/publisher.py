@@ -68,8 +68,15 @@ async def publish_pending(channel_name: str, dry_run: bool = False, limit: Optio
     attorneys_tag = get_tag_id(settings.social_audience_attorneys_tag)
     public_tag = get_tag_id(settings.social_audience_public_tag)
 
-    posts = [p for p in get_posts_to_process(ok_name) if not ({done_id, failed_id} & set(p["tags"]))]
-    logger.info("%d WordPress posts approved for %s", len(posts), channel_name)
+    approved = get_posts_to_process(ok_name)
+    held = [p for p in approved if failed_id and failed_id in p["tags"]]
+    posts = [p for p in approved if not ({done_id, failed_id} & set(p["tags"]))]
+    logger.info("%d WordPress posts approved for %s (%d held by %s)", len(posts), channel_name, len(held), failed_name)
+    if held:
+        report.notes.append(
+            f"{len(held)} post(s) held by the '{failed_name}' tag; remove it to retry: "
+            + "; ".join(p["title"]["rendered"] for p in held)
+        )
 
     if dry_run:
         for p in posts:

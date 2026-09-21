@@ -168,7 +168,14 @@ async def publish_pending(dry_run: bool = False, limit: Optional[int] = None) ->
         return report
 
     posts = candidates(ok_id, done_id, failed_id)
-    logger.info("%d WordPress posts approved for Instagram", len(posts))
+    held = [p for p in get_posts_to_process(settings.instagram_ok_tag) if failed_id and failed_id in p["tags"]]
+    logger.info("%d WordPress posts approved for Instagram (%d held by %s)",
+                len(posts), len(held), settings.instagram_failed_tag)
+    if held:
+        report.notes.append(
+            f"{len(held)} post(s) held by the '{settings.instagram_failed_tag}' tag; remove it to retry: "
+            + "; ".join(_title(p) for p in held)
+        )
 
     if dry_run:
         for p in posts:

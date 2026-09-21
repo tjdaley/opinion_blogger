@@ -72,4 +72,18 @@ def status_summary() -> str:
 
     draft_count = post_migrator.count_posts_by_status("draft")
     parts.append(f"blog draft={draft_count or 0}")
+
+    # A stalled promote step is otherwise invisible: the pipeline still ends
+    # "done" while posts pile up here.
+    try:
+        promo = post_migrator.promotion_counts()
+        parts.append(f"awaiting promotion={promo['ready']}")
+        if promo["failed"]:
+            parts.append(f"promote-failed={promo['failed']}")
+        if promo["review"]:
+            parts.append(f"promote-held-for-review={promo['review']}")
+    except Exception as e:
+        logger.error("status_summary: failed counting posts awaiting promotion: %s", e)
+        parts.append(f"awaiting promotion={e}")
+
     return " ".join(parts)
