@@ -20,7 +20,7 @@ import requests
 from db.connection import social_post_repo
 from instagram import storage
 from instagram.publisher import RunReport
-from post_migrator import get_posts_to_process, get_tag_id
+from post_migrator import get_posts_to_process, get_tag_id, update_terms
 from social.channels.base import Channel
 from social.channels.facebook import FacebookChannel
 from social.channels.threads import ThreadsChannel
@@ -57,10 +57,7 @@ def category_id(slug: str) -> Optional[int]:
 
 
 def _swap_tags(post: dict, ok_id: int, done_id: Optional[int]) -> None:
-    tags = [t for t in post["tags"] if t != ok_id]
-    if done_id and done_id not in tags:
-        tags.append(done_id)
-    _update_post(post["id"], tags=tags)
+    update_terms(post["id"], add_tags=[done_id], remove_tags=[ok_id])
 
 
 async def publish_pending(channel_name: str, dry_run: bool = False, limit: Optional[int] = None) -> RunReport:
@@ -153,7 +150,7 @@ async def publish_pending(channel_name: str, dry_run: bool = False, limit: Optio
             report.failed.append(f"{src.title}: {e}")
             if failed_id:
                 try:
-                    _update_post(post["id"], tags=post["tags"] + [failed_id])
+                    update_terms(post["id"], add_tags=[failed_id])
                 except Exception as tag_e:
                     logger.error("Could not add failed tag to %s: %s", src.title, tag_e)
 

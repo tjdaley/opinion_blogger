@@ -26,7 +26,7 @@ from db.models.court_opinion import CourtOpinionInDB
 from instagram import graph, storage
 from instagram.content import build_carousel
 from instagram.renderer import render_slides
-from post_migrator import find_case_key, get_posts_to_process, get_tag_id
+from post_migrator import find_case_key, get_posts_to_process, get_tag_id, update_terms
 from util.loggerfactory import LoggerFactory
 from util.settings import settings
 
@@ -68,7 +68,7 @@ def _update_post(post: dict, **fields: List[int]) -> None:
 
 
 def _set_tags(post: dict, tags: List[int]) -> None:
-    _update_post(post, tags=tags)
+    _update_post(post, tags=tags)  # full-list write; callers below prefer update_terms
 
 
 def _category_id(slug: str) -> Optional[int]:
@@ -81,11 +81,7 @@ def _category_id(slug: str) -> Optional[int]:
 def _mark_published(post: dict, ok_id: int, done_id: Optional[int], category_id: Optional[int]) -> None:
     """Swap ok -> done tag and add the Instagram category, which feeds the
     thomasjdaley.com/instagram-posts page the bio links to."""
-    tags = [t for t in post["tags"] if t != ok_id] + ([done_id] if done_id and done_id not in post["tags"] else [])
-    fields = {"tags": tags}
-    if category_id and category_id not in post["categories"]:
-        fields["categories"] = post["categories"] + [category_id]
-    _update_post(post, **fields)
+    update_terms(post["id"], add_tags=[done_id], remove_tags=[ok_id], add_categories=[category_id])
 
 
 def _backfill_category(done_id: Optional[int], category_id: Optional[int]) -> int:
@@ -96,7 +92,7 @@ def _backfill_category(done_id: Optional[int], category_id: Optional[int]) -> in
     fixed = 0
     for post in get_posts_to_process(settings.instagram_done_tag):
         if category_id not in post["categories"]:
-            _update_post(post, categories=post["categories"] + [category_id])
+            update_terms(post["id"], add_categories=[category_id])
             fixed += 1
     return fixed
 
@@ -229,7 +225,7 @@ async def publish_pending(dry_run: bool = False, limit: Optional[int] = None) ->
             report.failed.append(f"{title}: {e}")
             if failed_id:
                 try:
-                    _set_tags(post, post["tags"] + [failed_id])
+                    update_terms(post["id"], add_tags=[failed_id])
                 except Exception as tag_e:
                     logger.error("Could not add failed tag to %s: %s", title, tag_e)
 

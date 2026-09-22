@@ -3,7 +3,7 @@ import json
 import time
 import random
 import re
-from typing import List, Optional, Union
+from typing import Iterable, List, Optional, Union
 import requests
 from markdownify import markdownify as md
 from openai import OpenAI
@@ -46,6 +46,39 @@ def get_tag_id(tag_slug: str) -> Union[int, None]:
     if tags:
         return tags[0]['id']
     return None
+
+def update_terms(post_id: int,
+                 add_tags: Iterable[Optional[int]] = (), remove_tags: Iterable[Optional[int]] = (),
+                 add_categories: Iterable[Optional[int]] = ()) -> None:
+    """
+    Add/remove individual tags (and categories) on a WordPress post.
+
+    WordPress replaces the whole term list on every write, so a caller that
+    sends a list built from an older snapshot silently reverts whatever another
+    stage changed in between - e.g. the Threads publisher undoing the Facebook
+    publisher's re-tag seconds earlier. Re-reading immediately before writing
+    keeps each stage to its own terms.
+    """
+    auth = (WP_USER, WP_APP_PASSWORD)
+    current = requests.get(f"{WP_URL}/posts/{post_id}", params={"context": "edit"}, auth=auth, timeout=30)
+    current.raise_for_status()
+    post = current.json()
+
+    tags = (set(post["tags"]) - {t for t in remove_tags if t}) | {t for t in add_tags if t}
+    categories = set(post["categories"]) | {c for c in add_categories if c}
+
+    payload: dict[str, list[int]] = {}
+    if tags != set(post["tags"]):
+        payload["tags"] = sorted(tags)
+    if categories != set(post["categories"]):
+        payload["categories"] = sorted(categories)
+    if not payload:
+        return
+
+    resp = requests.post(f"{WP_URL}/posts/{post_id}", json=payload, auth=auth, timeout=30)
+    resp.raise_for_status()
+    logger.info("Updated terms on post %s: %s", post_id, payload)
+
 
 def promotion_counts() -> dict[str, int]:
     """
@@ -356,17 +389,10 @@ async def process_workflow():
         failure back to the caller as a migration error: the opinion is already
         in court_opinions by this point, so tagging the post failed would be a
         lie that also blocks it forever."""
-        current_tags: list[int] = post['tags']  # type: ignore
-        new_tags = [t for t in current_tags if t != tag_id_to_publish]
-        if tag_id_to_mark_success and tag_id_to_mark_success not in new_tags:
-            new_tags.append(tag_id_to_mark_success)
         for attempt in range(3):
             try:
-                resp = requests.post(f"{WP_URL}/posts/{post['id']}",
-                                     json={'tags': new_tags},
-                                     auth=(WP_USER, WP_APP_PASSWORD))
-                resp.raise_for_status()
-                logger.info("Updated tags for post %s to %s", post.get('id'), new_tags)
+                update_terms(post['id'], add_tags=[tag_id_to_mark_success],  # type: ignore
+                             remove_tags=[tag_id_to_publish])
                 return True
             except Exception as e:
                 logger.warning("Tag update attempt %d failed for post %s: %s", attempt + 1, post.get('id'), e)
@@ -376,12 +402,7 @@ async def process_workflow():
         return False
 
     def _tag_migration_error(post: dict[str, str]):
-        current_tags: list[int] = post['tags']  # type: ignore
-        if tag_id_to_mark_error and tag_id_to_mark_error not in current_tags:
-            current_tags.append(tag_id_to_mark_error)
-        requests.post(f"{WP_URL}/posts/{post['id']}",
-                    json={'tags': current_tags},
-                    auth=(WP_USER, WP_APP_PASSWORD))
+        update_terms(post['id'], add_tags=[tag_id_to_mark_error])  # type: ignore
 
     successfully_uploaded = 0
 
